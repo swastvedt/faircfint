@@ -1,21 +1,21 @@
 prob_trunc <- function(p) pmax(pmin(p, 0.995),0.005)
 
-#' Get estimated unfairness metrics
-#'
-#' 'get_defs_analysis' returns a list of unfairness definitions.
-#'
-#' Note: Indices and/or order of definitions in output of this function are
-#'  used in formatting functions.
-#'
-#' @param data Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
-#'  D (binary 0/1), Y0 (estimated), pi (estimated).
-#' @param cutoff Classification cutoff. Must be a single numeric value.
-#'
-#' @returns
-#' A list with the following components:
-#'
-#' * defs: vector of unfairness definitions with (12+4)nlevels(A1)nlevels(A2) items
-#'
+# Get estimated unfairness metrics
+#
+# 'get_defs_analysis' returns a list of unfairness definitions.
+#
+# Note: Indices and/or order of definitions in output of this function are
+#  used in formatting functions.
+#
+# @param data Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
+#  D (binary 0/1), Y0 (estimated), pi (estimated).
+# @param cutoff Classification cutoff. Must be a single numeric value.
+#
+# @returns
+# A list with the following components:
+#
+# * defs: vector of unfairness definitions with (12+4)nlevels(A1)nlevels(A2) items
+
 get_defs_analysis <- function(data, cutoff) {
   # Check inputs
   if(!"D"%in%colnames(data) | !"pi"%in%colnames(data)) stop("'data' must include columns D and pi")
@@ -180,22 +180,22 @@ get_defs_analysis <- function(data, cutoff) {
   return(list(defs = defs))
 }
 
-#' Rescaled, stratified bootstrap for unfairness metrics
-#'
-#' @param data Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
-#'  D (binary 0/1), covariates used to train propensity score model,
-#'  S_prob (continuous risk probability).
-#' @inheritParams get_defs_analysis
-#' @param B Number of bootstrap replications.
-#' @param m_factor Fractional power for calculating resample size (default 0.75).
-#' @param pi_model_type Type of propensity score model. Options are 'glm' (GLM).
-#'  or 'rf' (random forest)
-#' @param pi_model_seed Random seed for random forest propensity score model.
-#' @param f_lasso Formula for GLM propensity score model.
-#' @param xvars Character vector of covariates used in propensity score model.
-#' @param defs_length_base Base length for output of get_defs_analysis.
-#'
-#' @returns A matrix of definitions, one row for each of the B bootstrap replications.
+# Rescaled, stratified bootstrap for unfairness metrics
+#
+# @param data Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
+#  D (binary 0/1), covariates used to train propensity score model,
+#  S_prob (continuous risk probability).
+# @inheritParams get_defs_analysis
+# @param B Number of bootstrap replications.
+# @param m_factor Fractional power for calculating resample size (default 0.75).
+# @param pi_model_type Type of propensity score model. Options are 'glm' (GLM).
+#  or 'rf' (random forest)
+# @param pi_model_seed Random seed for random forest propensity score model.
+# @param f_lasso Formula for GLM propensity score model.
+# @param xvars Character vector of covariates used in propensity score model.
+# @param defs_length_base Base length for output of get_defs_analysis.
+#
+# @returns A matrix of definitions, one row for each of the B bootstrap replications.
 
 bs_rescaled_analysis <- function(data, cutoff, B, m_factor = 0.75,
                                  pi_model_type, pi_model_seed = NULL, f_lasso = NULL, xvars,
@@ -229,14 +229,15 @@ bs_rescaled_analysis <- function(data, cutoff, B, m_factor = 0.75,
   return(boot.out)
 }
 
-#' Get estimated propensity score and $Y^0$ weighted estimator
-#'
-#' @inheritParams bs_rescaled_analysis
-#' @param pi_model Propensity score model object.
-#'
-#' @returns List with the following components:
-#'  * Y0est: Vector of inverse probability weighted estimates of $Y^0$.
-#'  * pi: Vector of estimated propensity scores.
+# Get estimated propensity score and $Y^0$ weighted estimator
+#
+# @inheritParams bs_rescaled_analysis
+# @param pi_model Propensity score model object.
+#
+# @returns List with the following components:
+#  * Y0est: Vector of inverse probability weighted estimates of $Y^0$.
+#  * pi: Vector of estimated propensity scores.
+#
 
 get_est_analysis <- function(data, cutoff,
                              pi_model = NULL, pi_model_type, pi_model_seed = NULL, f_lasso = NULL,
@@ -284,13 +285,13 @@ get_est_analysis <- function(data, cutoff,
   return(est_choice)
 }
 
-#' Simulate null distributions.
-#'
-#' @inheritParams bs_rescaled_analysis
-#' @param R Number of replications.
-#'
-#' @returns List with the following components:
-#'  * ipw: Matrix of null unfairness metrics, one row for each replication.
+# Simulate null distributions.
+#
+# @inheritParams bs_rescaled_analysis
+# @param R Number of replications.
+#
+# @returns List with the following components:
+#  * ipw: Matrix of null unfairness metrics, one row for each replication.
 
 analysis_nulldist <- function(data, R, cutoff, xvars,
                               pi_model_type, pi_model_seed = NULL, f_lasso = NULL,
@@ -353,12 +354,21 @@ analysis_nulldist <- function(data, R, cutoff, xvars,
 
 #' Main function: Estimation of nuisance parameters and unfairness metrics.
 #'
-#' @inheritParams bs_rescaled_analysis
+#' @param data Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
+#'  D (binary 0/1), covariates used to train propensity score model,
+#'  S_prob (continuous risk probability).
+#' @param cutoff Classification cutoff. Must be a single numeric value.
+#' @param pi_model Propensity score model object.
+#' @param pi_model_type Type of propensity score model. Options are 'glm' (GLM).
+#'  or 'rf' (random forest)
+#' @param pi_model_seed Random seed for random forest propensity score model.
+#' @param f_lasso Formula for GLM propensity score model.
+#' @param xvars Character vector of covariates used in propensity score model.
 #' @param gen_null T/F: generate null distributions.
 #' @param R_null Number of replications for null distribution.
 #' @param bootstrap Obtain bootstrap estimates using rescaled method ('rescaled') or
 #'  no bootstrap ('none', the default).
-#' @inheritParams get_est_analysis
+#' @param m_factor Fractional power for calculating resample size (default 0.75).
 #'
 #' @returns List with the following components:
 #'  * defs: estimated definitions
@@ -366,6 +376,8 @@ analysis_nulldist <- function(data, R, cutoff, xvars,
 #'  * table_null: null distribution table (if gen_null = T)
 #'  * boot_out: bootstrap estimates for metrics and error rates (if bootstrap = 'rescaled')
 #'  * est.choice: Input data frame with Y0 estimates added
+#'
+#' @export
 
 analysis_estimation <- function(data, cutoff,
                                 pi_model, pi_model_type, pi_model_seed = NULL, f_lasso = NULL,

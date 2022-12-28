@@ -8,6 +8,14 @@
 \description{
 This package provides functions for estimation and inference for intersectional, counterfactual unfairness metrics. Estimation is done with inverse probability weighting, and inference is via the rescaled bootstrap and permutation null distributions.
 }
+\seealso{
+Useful links:
+\itemize{
+  \item \url{https://github.com/swastvedt/faircfint}
+  \item Report bugs at \url{https://github.com/swastvedt/faircfint/issues}
+}
+
+}
 \author{
 \strong{Maintainer}: Solvejg Wastvedt \email{wastv004@umn.edu} (\href{https://orcid.org/0000-0002-2420-7909}{ORCID})
 

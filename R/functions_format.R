@@ -1,14 +1,20 @@
-#' Extract names of variables with non-zero coefficients after cv.glmnet.
-#'
-#' @param model cv.glmnet model object.
-#' @param lambda Optional lambda value for selecting coefficients. Defaults to lambda.1se.
-#' @param xvars Variable names for all predictors in cv.glmnet object.
-#' @param outcome Outcome variable name (for formula)
-#'
-#' @returns A list with the following components:
-#'  * coef: Dataframe with non-zero coefficients
-#'  * vars_names: Names of variables with non-zero coefficients
-#'  * formula: Formula with selected variables
+cond_round_3 <- function(table) {
+  table %>% dplyr::mutate(dplyr::across(where(is.numeric), round, digits=3)) %>%
+    dplyr::mutate(dplyr::across(dplyr::everything(), function(x) {replace(x, x==0, "<0.001")}))
+}
+utils::globalVariables("where")
+
+# Extract names of variables with non-zero coefficients after cv.glmnet.
+#
+# @param model cv.glmnet model object.
+# @param lambda Optional lambda value for selecting coefficients. Defaults to lambda.1se.
+# @param xvars Variable names for all predictors in cv.glmnet object.
+# @param outcome Outcome variable name (for formula)
+#
+# @returns A list with the following components:
+#  * coef: Dataframe with non-zero coefficients
+#  * vars_names: Names of variables with non-zero coefficients
+#  * formula: Formula with selected variables
 
 select_coef <- function(model, lambda = NULL, xvars, outcome) {
   if(!is.null(lambda)) {
@@ -31,12 +37,12 @@ select_coef <- function(model, lambda = NULL, xvars, outcome) {
   return(list(coef = coef, vars_names = vars_names, formula = formula))
 }
 
-#' Get vector of names for output of 'get_defs_analysis' function.
-#'
-#' @param A1_length Length of 'A1' protected characteristic variable.
-#' @param A2_length Length of 'A2' protected characteristic variable.
-#'
-#' @returns Vector of names.
+# Get vector of names for output of 'get_defs_analysis' function.
+#
+# @param A1_length Length of 'A1' protected characteristic variable.
+# @param A2_length Length of 'A2' protected characteristic variable.
+#
+# @returns Vector of names.
 
 defs_names <- function(A1_length, A2_length) {
   A1A2_length <- A1_length*A2_length
@@ -53,12 +59,12 @@ defs_names <- function(A1_length, A2_length) {
   )
 }
 
-#' Assign column names to output of 'get_defs_analysis' or other list result object.
-#'
-#' @inheritParams defs_names
-#' @param defs List of definitions, output by 'get_defs_analysis' function.
-#'
-#' @returns Dataframe of unfairness metrics with named columns.
+# Assign column names to output of 'get_defs_analysis' or other list result object.
+#
+# @inheritParams defs_names
+# @param defs List of definitions, output by 'get_defs_analysis' function.
+#
+# @returns Dataframe of unfairness metrics with named columns.
 
 names_defs <- function(defs, A1_length, A2_length) {
   df <- as.data.frame(t(defs))
@@ -66,12 +72,12 @@ names_defs <- function(defs, A1_length, A2_length) {
   return(df)
 }
 
-#' Assign column names to bootstrap results or other dataframe result object.
-#'
-#' @inheritParams defs_names
-#' @param bs_table Dataframe of bootstrap results.
-#'
-#' @returns Dataframe of bootstrap results with named columns.
+# Assign column names to bootstrap results or other dataframe result object.
+#
+# @inheritParams defs_names
+# @param bs_table Dataframe of bootstrap results.
+#
+# @returns Dataframe of bootstrap results with named columns.
 
 names_df <- function(bs_table, A1_length, A2_length) {
   df <- as.data.frame(bs_table)
@@ -79,14 +85,14 @@ names_df <- function(bs_table, A1_length, A2_length) {
   return(df)
 }
 
-#' Create rescaled bootstrap estimate table from results of bs_rescaled_analysis.
-#'
-#' @inheritParams names_df
-#' @inheritParams names_defs
-#' @param sampsize Sample size of estimation data set.
-#' @param m_factor Fractional power for calculating resample size (default 0.75).
-#'
-#' @returns Dataframe of rescaled bootstrap estimates.
+# Create rescaled bootstrap estimate table from results of bs_rescaled_analysis.
+#
+# @inheritParams names_df
+# @inheritParams names_defs
+# @param sampsize Sample size of estimation data set.
+# @param m_factor Fractional power for calculating resample size.
+#
+# @returns Dataframe of rescaled bootstrap estimates.
 
 get_bs_rescaled <- function(bs_table, defs, sampsize, A1_length, A2_length,
                             m_factor) {
@@ -96,15 +102,15 @@ get_bs_rescaled <- function(bs_table, defs, sampsize, A1_length, A2_length,
   sqrt(m)*sweep(bs_table, MARGIN = 2, STATS = unlist(est_vals), FUN = "-")
 }
 
-#' Calculate normal approximation confidence interval.
-#'
-#' @param bs_rescaled Rescaled bootstrap estimate table (result of get_bs_rescaled).
-#' @param est_named Named 1-row dataframe of raw metric estimates (result of names_defs).
-#' @param parameter Column name of the metric being estimated (string).
-#' @param sampsize Sample size of estimation data set.
-#' @param alpha Size of (1-alpha) confidence interval.
-#'
-#' @returns Dataframe with point estimate, SE, variance, 1-alpha confidence interval.
+# Calculate normal approximation confidence interval.
+#
+# @param bs_rescaled Rescaled bootstrap estimate table (result of get_bs_rescaled).
+# @param est_named Named 1-row dataframe of raw metric estimates (result of names_defs).
+# @param parameter Column name of the metric being estimated (string).
+# @param sampsize Sample size of estimation data set.
+# @param alpha Size of confidence interval.
+#
+# @returns Dataframe with point estimate, SE, variance, 1-alpha confidence interval.
 
 ci_norm <- function(bs_rescaled, est_named, parameter, sampsize, alpha) {
   data.frame(
@@ -118,12 +124,12 @@ ci_norm <- function(bs_rescaled, est_named, parameter, sampsize, alpha) {
   )
 }
 
-#' Calculate t-interval.
-#'
-#' @inheritParams ci_norm
-#' @param m_factor Fractional power for calculating resample size (default 0.75).
-#'
-#' @returns Dataframe with point estimate, SE, variance, 1-alpha confidence interval.
+# Calculate t-interval.
+#
+# @inheritParams ci_norm
+# @param m_factor Fractional power for calculating resample size.
+#
+# @returns Dataframe with point estimate, SE, variance, 1-alpha confidence interval.
 
 ci_tint <- function(bs_rescaled, est_named, parameter, sampsize, alpha, m_factor) {
   se_table <- ci_norm(bs_rescaled, est_named, parameter, sampsize, alpha)
@@ -137,12 +143,12 @@ ci_tint <- function(bs_rescaled, est_named, parameter, sampsize, alpha, m_factor
   )
 }
 
-#' Truncate confidence interval.
-#'
-#' @param ci_result Confidence interval dataframe (result of ci_norm or ci_tint).
-#' @param type Type of confidence interval ('norm' or 'tint')
-#'
-#' @returns Confidence interval dataframe with truncated interval.
+# Truncate confidence interval.
+#
+# @param ci_result Confidence interval dataframe (result of ci_norm or ci_tint).
+# @param type Type of confidence interval ('norm' or 'tint')
+#
+# @returns Confidence interval dataframe with truncated interval.
 
 ci_trunc <- function(ci_result, type) {
   if(type == "norm") {

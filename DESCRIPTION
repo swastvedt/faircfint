@@ -13,12 +13,15 @@ Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
 Imports: 
     dplyr,
+    egg,
+    ggplot2,
     magrittr,
     randomForest,
     rlang,
     splitstackshape,
     stats,
     stringr,
+    tidyr,
     utils
 URL: https://github.com/swastvedt/faircfint
 BugReports: https://github.com/swastvedt/faircfint/issues

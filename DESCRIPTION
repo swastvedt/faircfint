@@ -20,3 +20,5 @@ Imports:
     stats,
     stringr,
     utils
+URL: https://github.com/swastvedt/faircfint
+BugReports: https://github.com/swastvedt/faircfint/issues

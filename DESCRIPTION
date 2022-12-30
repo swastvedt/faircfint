@@ -25,3 +25,6 @@ Imports:
     utils
 URL: https://github.com/swastvedt/faircfint
 BugReports: https://github.com/swastvedt/faircfint/issues
+Depends: 
+    R (>= 2.10)
+LazyData: true

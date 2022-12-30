@@ -14,7 +14,7 @@ prob_trunc <- function(p) pmax(pmin(p, 0.995),0.005)
 # @returns
 # A list with the following components:
 #
-# * defs: vector of unfairness definitions with (12+4)nlevels(A1)nlevels(A2) items
+# * defs: vector of unfairness definitions with 12+(4*nlevels(A1)nlevels(A2))+2*nlevels(A1)+2*nlevels(A2) items
 
 get_defs_analysis <- function(data, cutoff) {
   # Check inputs
@@ -171,7 +171,7 @@ get_defs_analysis <- function(data, cutoff) {
   cdelta_marg_neg <- mean(c(sapply(cdeltans_A1, abs), sapply(cdeltans_A2, abs)), na.rm = T)
   cdelta_marg_pos_new <- mean(c(sapply(cdeltaps_new_A1, abs), sapply(cdeltaps_new_A2, abs)), na.rm = T)
 
-  ## Definitions (list with 16 items)
+  ## Definitions
   defs <- c(fpr_vec, fnr_vec, cfpr_new_vec, cfnr_vec,
             cfpr_new_marg_vec_A1, cfpr_new_marg_vec_A2, cfnr_marg_vec_A1, cfnr_marg_vec_A2,
             cdelta_avg_neg, cdelta_max_neg, cdelta_quant_neg, cdelta_var_neg, odelta_int_neg, cdelta_marg_neg,
@@ -397,6 +397,9 @@ analysis_estimation <- function(data, cutoff,
   names(cutoff) <- cutoff
   ## placeholder for 'est'
   est <- list("ipw" = "ipw")
+  # Make protected characteristics factors if they aren't already
+  data$A1 <- as.factor(as.character(data$A1))
+  data$A2 <- as.factor(as.character(data$A2))
 
   # If gen_null option is selected, generate the null distribution
   if(gen_null) {

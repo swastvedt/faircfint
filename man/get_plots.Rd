@@ -9,6 +9,8 @@ get_plots(
   sampsize,
   alpha,
   m_factor,
+  A1_length,
+  A2_length,
   plot_labels,
   plot_values,
   plot_colors
@@ -23,6 +25,10 @@ Must be a list with at least the components: defs, table_null, boot_out.}
 \item{alpha}{Size of confidence interval.}
 
 \item{m_factor}{Fractional power for calculating resample size.}
+
+\item{A1_length}{Number of levels of A1.}
+
+\item{A2_length}{Number of levels of A2.}
 
 \item{plot_labels}{Vector of (shortened) protected group names for labeling counterfactual error
 rate plots. Must have length(A1)*length(A2) components.}

@@ -5,6 +5,8 @@
 #' @param sampsize Sample size of estimation data set.
 #' @param alpha Size of confidence interval.
 #' @param m_factor Fractional power for calculating resample size.
+#' @param A1_length Number of levels of A1.
+#' @param A2_length Number of levels of A2.
 #' @param plot_labels Vector of (shortened) protected group names for labeling counterfactual error
 #'  rate plots. Must have length(A1)*length(A2) components.
 #' @param plot_values Vector of numeric ggplot2 shape scale values
@@ -21,28 +23,28 @@
 #'
 #' @export
 
-get_plots <- function(results, sampsize, alpha, m_factor,
+get_plots <- function(results, sampsize, alpha, m_factor, A1_length, A2_length,
                       plot_labels, plot_values, plot_colors) {
   ##################
   # Prepare results
   ##################
   # Named unfairness metrics
-  est_named <- names_defs(results$defs, A1_length = 2, A2_length = 3)
+  est_named <- names_defs(results$defs, A1_length = A1_length, A2_length = A2_length)
 
   # Rescaled bootstrap results
   bs_rescaled <- get_bs_rescaled(bs_table = results$boot_out$ipw, defs = results$defs, sampsize = sampsize,
-                                 A1_length = 2, A2_length = 3, m_factor = m_factor)
+                                 A1_length = A1_length, A2_length = A2_length, m_factor = m_factor)
 
   # Confidence intervals
   ## t-interval
-  ci_t_avg_neg <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_avg_neg", sampsize = sampsize)
-  ci_t_avg_pos <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_avg_pos_new", sampsize = sampsize)
+  ci_t_avg_neg <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_avg_neg", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
+  ci_t_avg_pos <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_avg_pos_new", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
 
-  ci_t_max_neg <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_max_neg", sampsize = sampsize)
-  ci_t_max_pos <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_max_pos_new", sampsize = sampsize)
+  ci_t_max_neg <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_max_neg", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
+  ci_t_max_pos <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_max_pos_new", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
 
-  ci_t_var_neg <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_var_neg", sampsize = sampsize)
-  ci_t_var_pos <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_var_pos_new", sampsize = sampsize)
+  ci_t_var_neg <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_var_neg", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
+  ci_t_var_pos <- ci_tint(bs_rescaled, est_named, parameter = "cdelta_var_pos_new", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
   ## t-interval, truncated
   ci_trunc_avg_neg <- ci_trunc(ci_t_avg_neg, type = "tint")
   ci_trunc_avg_pos <- ci_trunc(ci_t_avg_pos, type = "tint")
@@ -62,19 +64,19 @@ get_plots <- function(results, sampsize, alpha, m_factor,
   results_cfnr <- as.list(dplyr::select(est_named, (dplyr::contains("cfnr") & !dplyr::contains("marg"))))
 
   ci_trunc_cfpr <- lapply(names(results_cfpr), function(n) {
-    ci_trunc(ci_tint(bs_rescaled, est_named, parameter = n, sampsize = sampsize), type = "tint")
+    ci_trunc(ci_tint(bs_rescaled, est_named, parameter = n, sampsize = sampsize, alpha = alpha, m_factor = m_factor), type = "tint")
   })
   names(ci_trunc_cfpr) <- names(results_cfpr)
   ci_trunc_cfpr <- ci_trunc_cfpr %>% dplyr::bind_rows(.id = "stat")
 
   ci_trunc_cfnr <- lapply(names(results_cfnr), function(n) {
-    ci_trunc(ci_tint(bs_rescaled, est_named, parameter = n, sampsize = sampsize), type = "tint")
+    ci_trunc(ci_tint(bs_rescaled, est_named, parameter = n, sampsize = sampsize, alpha = alpha, m_factor = m_factor), type = "tint")
   })
   names(ci_trunc_cfnr) <- names(results_cfnr)
   ci_trunc_cfnr <- ci_trunc_cfnr %>% dplyr::bind_rows(.id = "stat")
 
   # Named null distribution results
-  table_null <- names_df(results$table_null, A1_length = 2, A2_length = 3)
+  table_null <- names_df(results$table_null, A1_length = A1_length, A2_length = A2_length)
   # U-value table
   table_uval <- data.frame(
     cdelta_avg_neg = mean(table_null$cdelta_avg_neg < est_named$cdelta_avg_neg, na.rm = T),
@@ -231,7 +233,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
   ## All in single plot
   p_null_all <- egg::ggarrange(plots = list(p_null_neg_avg, p_null_pos_avg, p_null_neg_max,
                                             p_null_pos_max, p_null_neg_var, p_null_pos_var),
-                               nrow = 3)
+                               nrow = 3, draw = F)
 
   # Return plots
   return(list(cfpr = p_cfpr, cfnr = p_cfnr, metrics_pos = p_metrics_pos,

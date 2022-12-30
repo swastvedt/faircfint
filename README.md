@@ -22,4 +22,28 @@ You can install the development version of faircfint from
 devtools::install_github("swastvedt/faircfint")
 ```
 
+## Usage
+
+The main function, analysis_estimation, calculates the intersectional,
+counterfactual unfairness metrics from data (which must include risk
+predictions).
+
+``` r
+library(faircfint)
+
+# Build propensity score model
+pi_model_ex <- glm(as.factor(as.character(D)) ~ A1*A2 + A1 + A2 + S_prob + X.1 + X.2 + X.3 + X.4, data = faircfint::data_est, family = "binomial")
+## Propensity score model formula
+pi_formula_ex <- as.formula(pi_model_ex$formula)
+
+# Estimate unfairness metrics, including bootstrap and null distribution
+results <- analysis_estimation(data = faircfint::data_est, cutoff = 0.5, pi_model = pi_model_ex, pi_model_type = "glm", f_lasso = pi_formula_ex, xvars = c("X.1", "X.2", "X.3", "X.4"), gen_null = T, bootstrap = 'rescaled')
+
+# Plot results
+results_plots <- get_plots(results, sampsize = 5000, alpha = 0.5, m_factor = 0.75, A1_length = 2, A2_length = 2, plot_labels = c("Group 1", "Group 2", "Group 3", "Group 4"), plot_values = c(15,16,17,18), plot_colors = c("black", "gray", "red", "dodgerblue"))
+
+# Example plot of negative (cFNR) versions of metrics
+#results_plots$cfnr
+```
+
 <!-- You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this. You could also use GitHub Actions to re-render `README.Rmd` every time you push. An example workflow can be found here: <https://github.com/r-lib/actions/tree/v1/examples>. -->

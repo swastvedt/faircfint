@@ -13,6 +13,9 @@
 #'  for counterfactual error rate plots. Must have length(A1)*length(A2) components.
 #' @param plot_colors Vector of colors (string name or hex) for counterfactual error
 #'  rate plots. Must have length(A1)*length(A2) components.
+#' @param delta_uval Threshold for u-value test. Must be between 0 and 1.
+#' @param uval_labels Vector of x and y coordinates for labels on u-value plots. Must have length
+#'  12.
 #'
 #' @returns List of plots with the following components:
 #'  * cfpr: Counterfactual false positive rates by group.
@@ -24,7 +27,7 @@
 #' @export
 
 get_plots <- function(results, sampsize, alpha, m_factor, A1_length, A2_length,
-                      plot_labels, plot_values, plot_colors) {
+                      plot_labels, plot_values, plot_colors, delta_uval, uval_labels) {
   ##################
   # Prepare results
   ##################
@@ -77,17 +80,28 @@ get_plots <- function(results, sampsize, alpha, m_factor, A1_length, A2_length,
 
   # Named null distribution results
   table_null <- names_df(results$table_null, A1_length = A1_length, A2_length = A2_length)
+
+  est_named_pivot <- est_named %>% dplyr::select(.data$cdelta_avg_neg, .data$cdelta_avg_pos_new,
+                                                 .data$cdelta_max_neg, .data$cdelta_max_pos_new,
+                                          .data$cdelta_var_neg, .data$cdelta_var_pos_new) %>%
+    tidyr::pivot_longer(dplyr::everything(), names_to = "stat", values_to = "value_obs")
+
+  table_null_delta <- table_null %>% dplyr::select(.data$cdelta_avg_neg, .data$cdelta_avg_pos_new,
+                                                   .data$cdelta_max_neg, .data$cdelta_max_pos_new,
+                                            .data$cdelta_var_neg, .data$cdelta_var_pos_new) %>%
+    tidyr::pivot_longer(dplyr::everything(), names_to = "stat", values_to = "value_null") %>%
+    dplyr::left_join(est_named_pivot, by = "stat") %>%
+    dplyr::mutate(obs_minus_null = .data$value_obs - .data$value_null)
+
   # U-value table
   table_uval <- data.frame(
-    cdelta_avg_neg = mean(table_null$cdelta_avg_neg < est_named$cdelta_avg_neg, na.rm = T),
-    cdelta_avg_pos_new = mean(table_null$cdelta_avg_pos_new < est_named$cdelta_avg_pos_new, na.rm = T),
-    cdelta_max_neg = mean(table_null$cdelta_max_neg < est_named$cdelta_max_neg, na.rm = T),
-    cdelta_max_pos_new = mean(table_null$cdelta_max_pos_new < est_named$cdelta_max_pos_new, na.rm = T),
-    cdelta_var_neg = mean(table_null$cdelta_var_neg < est_named$cdelta_var_neg, na.rm = T),
-    cdelta_var_pos_new = mean(table_null$cdelta_var_pos_new < est_named$cdelta_var_pos_new, na.rm = T)
+    cdelta_avg_neg = mean((est_named$cdelta_avg_neg - table_null$cdelta_avg_neg) > delta_uval, na.rm = T),
+    cdelta_avg_pos_new = mean((est_named$cdelta_avg_pos_new - table_null$cdelta_avg_pos_new) > delta_uval, na.rm = T),
+    cdelta_max_neg = mean((est_named$cdelta_max_neg - table_null$cdelta_max_neg) > delta_uval, na.rm = T),
+    cdelta_max_pos_new = mean((est_named$cdelta_max_pos_new - table_null$cdelta_max_pos_new) > delta_uval, na.rm = T),
+    cdelta_var_neg = mean((est_named$cdelta_var_neg - table_null$cdelta_var_neg) > delta_uval, na.rm = T),
+    cdelta_var_pos_new = mean((est_named$cdelta_var_pos_new - table_null$cdelta_var_pos_new) > delta_uval, na.rm = T)
   ) %>% cond_round_3()
-  ## Reversed (1-) u-value table
-  table_uval_rev <- table_uval %>% dplyr::mutate(dplyr::across(dplyr::everything(), function(x) {1-as.numeric(x)}))
 
   # Estimation table with confidence intervals
   ## Put all CI information in same table
@@ -159,77 +173,144 @@ get_plots <- function(results, sampsize, alpha, m_factor, A1_length, A2_length,
 
   # Null distribution/estimation plots
   ## Average
-  p_null_neg_avg <- ggplot2::ggplot(table_null, ggplot2::aes(x = .data$cdelta_avg_neg)) +
+  p_null_neg_avg <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "cdelta_avg_neg"), ggplot2::aes(x = .data$obs_minus_null)) +
     ggplot2::geom_density() +
-    ggplot2::geom_point(data = dplyr::filter(est_summaries, .data$stat == "cdelta_avg_neg"), ggplot2::aes(x = .data$value, y = 0), size = 3) +
-    ggplot2::geom_segment(data = ci_trunc_avg_neg, ggplot2::aes(x = .data$low_trans, xend = .data$high_trans), y = 0, yend = 0, size = 1) +
-    ggplot2::labs(x = "Measured unfairness", y = "density", title = "Average (negative)") +
+    ggplot2::geom_vline(xintercept = 0.1, linetype = 2) +
+    ggplot2::labs(x = "Obs. - Null", y = "density", title = "Average (negative)") +
     ggplot2::theme(axis.text.y = ggplot2::element_text(size = 9), axis.title.y = ggplot2::element_text(size = 12),
           legend.text = ggplot2::element_text(size = 11), axis.text.x = ggplot2::element_text(size = 9),
-          axis.title.x = ggplot2::element_text(size = 12)) +
-    ggplot2::geom_label(data = table_uval_rev,
-               mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_avg_neg)),
-               x = 0.55, y = 1, hjust = "right", size = 5)
+          axis.title.x = ggplot2::element_text(size = 12))
 
-  p_null_pos_avg <- ggplot2::ggplot(table_null, ggplot2::aes(x = .data$cdelta_avg_pos_new)) +
+  d_avgneg <- ggplot2::ggplot_build(p_null_neg_avg)$data[[1]]
+  d_avgneg_sub <- subset(d_avgneg, .data$x > 0.1)
+  if(nrow(d_avgneg_sub) > 0) {
+    p_null_neg_avg <- p_null_neg_avg +
+      ggplot2::geom_area(data = d_avgneg_sub, ggplot2::aes(x=.data$x, y=.data$y), fill = "#d3d3d3") +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_avg_neg)),
+                          x = uval_labels[1], y = uval_labels[2], hjust = "left", size = 5)
+  } else{
+    p_null_neg_avg <- p_null_neg_avg +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_avg_neg)),
+                          x = uval_labels[1], y = uval_labels[2], hjust = "left", size = 5)
+  }
+
+  p_null_pos_avg <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "cdelta_avg_pos_new"), ggplot2::aes(x = .data$obs_minus_null)) +
     ggplot2::geom_density() +
-    ggplot2::geom_point(data = dplyr::filter(est_summaries, .data$stat == "cdelta_avg_pos_new"), ggplot2::aes(x = .data$value, y = 0), size = 3) +
-    ggplot2::geom_segment(data = ci_trunc_avg_pos, ggplot2::aes(x = .data$low_trans, xend = .data$high_trans), y = 0, yend = 0, size = 1) +
-    ggplot2::labs(x = "Measured unfairness", y = "density", title = "Average (positive)") +
+    ggplot2::geom_vline(xintercept = 0.1, linetype = 2) +
+    ggplot2::labs(x = "Obs. - Null", y = "density", title = "Average (positive)") +
     ggplot2::theme(axis.text.y = ggplot2::element_text(size = 9), axis.title.y = ggplot2::element_text(size = 12),
           legend.text = ggplot2::element_text(size = 11), axis.text.x = ggplot2::element_text(size = 9),
-          axis.title.x = ggplot2::element_text(size = 12)) +
-    ggplot2::geom_label(data = table_uval_rev,
-               mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_avg_pos_new)),
-               x = 0.17, y = 5, hjust = "right", size = 5)
+          axis.title.x = ggplot2::element_text(size = 12))
+
+  d_avgpos <- ggplot2::ggplot_build(p_null_pos_avg)$data[[1]]
+  d_avgpos_sub <- subset(d_avgpos, .data$x > 0.1)
+  if(nrow(d_avgpos_sub) > 0) {
+    p_null_pos_avg <- p_null_pos_avg +
+      ggplot2::geom_area(data = d_avgpos_sub, ggplot2::aes(x=.data$x, y=.data$y), fill = "#d3d3d3") +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_avg_pos_new)),
+                          x = uval_labels[3], y = uval_labels[4], hjust = "left", size = 5)
+  } else {
+    p_null_pos_avg <- p_null_pos_avg +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_avg_pos_new)),
+                          x = uval_labels[3], y = uval_labels[4], hjust = "left", size = 5)
+  }
   ## Maximum
-  p_null_neg_max <- ggplot2::ggplot(table_null, ggplot2::aes(x = .data$cdelta_max_neg)) +
+  p_null_neg_max <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "cdelta_max_neg"), ggplot2::aes(x = .data$obs_minus_null)) +
     ggplot2::geom_density() +
-    ggplot2::geom_point(data = dplyr::filter(est_summaries, .data$stat == "cdelta_max_neg"), ggplot2::aes(x = .data$value, y = 0), size = 3) +
-    ggplot2::geom_segment(data = ci_trunc_max_neg, ggplot2::aes(x = .data$low_trans, xend = .data$high_trans), y = 0, yend = 0, size = 1) +
-    ggplot2::labs(x = "Measured unfairness", y = "density", title = "Maximum (negative)") +
+    ggplot2::geom_vline(xintercept = 0.1, linetype = 2) +
+    ggplot2::labs(x = "Obs. - Null", y = "density", title = "Maximum (negative)") +
     ggplot2::theme(axis.text.y = ggplot2::element_text(size = 9), axis.title.y = ggplot2::element_text(size = 12),
           legend.text = ggplot2::element_text(size = 11), axis.text.x = ggplot2::element_text(size = 9),
-          axis.title.x = ggplot2::element_text(size = 12)) +
-    ggplot2::geom_label(data = table_uval_rev,
-               mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_max_neg)),
-               x = 1, y = .5, hjust = "right", size = 5)
+          axis.title.x = ggplot2::element_text(size = 12))
 
-  p_null_pos_max <- ggplot2::ggplot(table_null, ggplot2::aes(x = .data$cdelta_max_pos_new)) +
+  d_maxneg <- ggplot2::ggplot_build(p_null_neg_max)$data[[1]]
+  d_maxneg_sub <- subset(d_maxneg, .data$x > 0.1)
+  if(nrow(d_maxneg_sub) > 0) {
+    p_null_neg_max <- p_null_neg_max +
+      ggplot2::geom_area(data = d_maxneg_sub, ggplot2::aes(x=.data$x, y=.data$y), fill = "#d3d3d3") +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_max_neg)),
+                          x = uval_labels[5], y = uval_labels[6], hjust = "left", size = 5)
+  } else {
+    p_null_neg_max <- p_null_neg_max +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_max_neg)),
+                          x = uval_labels[5], y = uval_labels[6], hjust = "left", size = 5)
+  }
+
+  p_null_pos_max <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "cdelta_max_pos_new"), ggplot2::aes(x = .data$obs_minus_null)) +
     ggplot2::geom_density() +
-    ggplot2::geom_point(data = dplyr::filter(est_summaries, .data$stat == "cdelta_max_pos_new"), ggplot2::aes(x = .data$value, y = 0), size = 3) +
-    ggplot2::geom_segment(data = ci_trunc_max_pos, ggplot2::aes(x = .data$low_trans, xend = .data$high_trans), y = 0, yend = 0, size = 1) +
-    ggplot2::labs(x = "Measured unfairness", y = "density", title = "Maximum (positive)") +
+    ggplot2::geom_vline(xintercept = 0.1, linetype = 2) +
+    ggplot2::labs(x = "Obs. - Null", y = "density", title = "Maximum (positive)") +
     ggplot2::theme(axis.text.y = ggplot2::element_text(size = 9), axis.title.y = ggplot2::element_text(size = 12),
           legend.text = ggplot2::element_text(size = 11), axis.text.x = ggplot2::element_text(size = 9),
-          axis.title.x = ggplot2::element_text(size = 12)) +
-    ggplot2::geom_label(data = table_uval_rev,
-               mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_max_pos_new)),
-               x = 0.3, y = 2.5, hjust = "right", size = 5)
+          axis.title.x = ggplot2::element_text(size = 12))
+
+  d_maxpos <- ggplot2::ggplot_build(p_null_pos_max)$data[[1]]
+  d_maxpos_sub <- subset(d_maxpos, .data$x > 0.1)
+  if(nrow(d_maxpos_sub) > 0) {
+    p_null_pos_max <- p_null_pos_max +
+      ggplot2::geom_area(data = d_maxpos_sub, ggplot2::aes(x=.data$x, y=.data$y), fill = "#d3d3d3") +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_max_pos_new)),
+                          x = uval_labels[7], y = uval_labels[8], hjust = "left", size = 5)
+  } else {
+    p_null_pos_max <- p_null_pos_max +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_max_pos_new)),
+                          x = uval_labels[7], y = uval_labels[8], hjust = "left", size = 5)
+  }
   ## Variational
-  p_null_neg_var <- ggplot2::ggplot(table_null, ggplot2::aes(x = .data$cdelta_var_neg)) +
+  p_null_neg_var <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "cdelta_var_neg"), ggplot2::aes(x = .data$obs_minus_null)) +
     ggplot2::geom_density() +
-    ggplot2::geom_point(data = dplyr::filter(est_summaries, .data$stat == "cdelta_var_neg"), ggplot2::aes(x = .data$value, y = 0), size = 3) +
-    ggplot2::geom_segment(data = ci_trunc_var_neg, ggplot2::aes(x = .data$low_trans, xend = .data$high_trans), y = 0, yend = 0, size = 1) +
-    ggplot2::labs(x = "Measured unfairness", y = "density", title = "Variational (negative)") +
+    ggplot2::geom_vline(xintercept = 0.1, linetype = 2) +
+    ggplot2::labs(x = "Obs. - Null", y = "density", title = "Variational (negative)") +
     ggplot2::theme(axis.text.y = ggplot2::element_text(size = 9), axis.title.y = ggplot2::element_text(size = 12),
           legend.text = ggplot2::element_text(size = 11), axis.text.x = ggplot2::element_text(size = 9),
-          axis.title.x = ggplot2::element_text(size = 12)) +
-    ggplot2::geom_label(data = table_uval_rev,
-               mapping = ggplot2::aes(label = paste0("u-value = ", round(.data$cdelta_var_neg, 3))),
-               x = 0.085, y = 10, hjust = "right", size = 5)
+          axis.title.x = ggplot2::element_text(size = 12))
 
-  p_null_pos_var <- ggplot2::ggplot(table_null, ggplot2::aes(x = .data$cdelta_var_pos_new)) +
+  d_varneg <- ggplot2::ggplot_build(p_null_neg_var)$data[[1]]
+  d_varneg_sub <- subset(d_varneg, .data$x > 0.1)
+  if(nrow(d_varneg_sub) > 0) {
+    p_null_neg_var <- p_null_neg_var +
+      ggplot2::geom_area(data = d_varneg_sub, ggplot2::aes(x=.data$x, y=.data$y), fill = "#d3d3d3") +
+      ggplot2::geom_label(data = table_uval,
+                 mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_var_neg)),
+                 x = uval_labels[9], y = uval_labels[10], hjust = "left", size = 5)
+  } else {
+    p_null_neg_var <- p_null_neg_var +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_var_neg)),
+                          x = uval_labels[9], y = uval_labels[10], hjust = "left", size = 5)
+  }
+
+  p_null_pos_var <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "cdelta_var_pos_new"), ggplot2::aes(x = .data$obs_minus_null)) +
     ggplot2::geom_density() +
-    ggplot2::geom_point(data = dplyr::filter(est_summaries, .data$stat == "cdelta_var_pos_new"), ggplot2::aes(x = .data$value, y = 0), size = 3) +
-    ggplot2::geom_segment(data = ci_trunc_var_pos, ggplot2::aes(x = .data$low_trans, xend = .data$high_trans), y = 0, yend = 0, size = 1) +
+    ggplot2::geom_vline(xintercept = 0.1, linetype = 2) +
     ggplot2::labs(x = "Measured unfairness", y = "density", title = "Variational (positive)") +
     ggplot2::theme(axis.text.y = ggplot2::element_text(size = 9), axis.title.y = ggplot2::element_text(size = 12),
           legend.text = ggplot2::element_text(size = 11), axis.text.x = ggplot2::element_text(size = 9),
-          axis.title.x = ggplot2::element_text(size = 12)) +
-    ggplot2::geom_label(data = table_uval_rev,
-               mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_var_pos_new)),
-               x = 0.011, y = 150, hjust = "right", size = 5)
+          axis.title.x = ggplot2::element_text(size = 12))
+
+  d_varpos <- ggplot2::ggplot_build(p_null_pos_var)$data[[1]]
+  d_varpos_sub <- subset(d_varpos, .data$x > 0.1)
+  if(nrow(d_varpos_sub) > 0) {
+    p_null_pos_var <- p_null_pos_var +
+      ggplot2::geom_area(data = d_varpos_sub, ggplot2::aes(x=.data$x, y=.data$y), fill = "#d3d3d3") +
+      ggplot2::geom_label(data = table_uval,
+                 mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_var_pos_new)),
+                 x = uval_labels[11], y = uval_labels[12], hjust = "left", size = 5)
+  } else {
+    p_null_pos_var <- p_null_pos_var +
+      ggplot2::geom_label(data = table_uval,
+                          mapping = ggplot2::aes(label = paste0("u-value = ", .data$cdelta_var_pos_new)),
+                          x = uval_labels[11], y = uval_labels[12], hjust = "left", size = 5)
+  }
+
   ## All in single plot
   p_null_all <- egg::ggarrange(plots = list(p_null_neg_avg, p_null_pos_avg, p_null_neg_max,
                                             p_null_pos_max, p_null_neg_var, p_null_pos_var),

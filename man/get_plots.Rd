@@ -13,7 +13,9 @@ get_plots(
   A2_length,
   plot_labels,
   plot_values,
-  plot_colors
+  plot_colors,
+  delta_uval,
+  uval_labels
 )
 }
 \arguments{
@@ -38,6 +40,11 @@ for counterfactual error rate plots. Must have length(A1)*length(A2) components.
 
 \item{plot_colors}{Vector of colors (string name or hex) for counterfactual error
 rate plots. Must have length(A1)*length(A2) components.}
+
+\item{delta_uval}{Threshold for u-value test. Must be between 0 and 1.}
+
+\item{uval_labels}{Vector of x and y coordinates for labels on u-value plots. Must have length
+12.}
 }
 \value{
 List of plots with the following components:

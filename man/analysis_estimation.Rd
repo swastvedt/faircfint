@@ -7,43 +7,74 @@
 analysis_estimation(
   data,
   cutoff,
+  estimator_type = c("normal", "small_internal", "small_borrow"),
+  gen_null = c(T, F),
+  bootstrap = c("none", "rescaled"),
+  m_factor = 0.75,
   pi_model,
-  pi_model_type,
+  pi_model_type = c("glm", "rf"),
   pi_model_seed = NULL,
-  f_lasso = NULL,
-  xvars,
-  gen_null = F,
-  R_null = 1000,
-  bootstrap = "none",
-  m_factor = 0.75
+  pi_xvars,
+  outcome_model_type = c(NULL, "glm", "rf", "neural_net"),
+  outcome_xvars = NULL,
+  fit_method_int = c(NULL, "multinomial", "neural_net"),
+  nfolds = 5,
+  pa_xvars_int = NULL,
+  data_external = NULL,
+  fit_method_ext = c(NULL, "multinomial", "neural_net"),
+  pa_xvars_ext = NULL,
+  borrow_metric = c(NULL, "auc", "brier"),
+  pa_model_ext = NULL
 )
 }
 \arguments{
 \item{data}{Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
 D (binary 0/1), covariates used to train propensity score model,
-S_prob (continuous risk probability).}
+S_prob (probability).}
 
 \item{cutoff}{Classification cutoff. Must be a single numeric value.}
 
-\item{pi_model}{Propensity score model object.}
-
-\item{pi_model_type}{Type of propensity score model. Options are 'glm' (GLM).
-or 'rf' (random forest)}
-
-\item{pi_model_seed}{Random seed for random forest propensity score model.}
-
-\item{f_lasso}{Formula for GLM propensity score model.}
-
-\item{xvars}{Character vector of covariates used in propensity score model.}
+\item{estimator_type}{Type of estimation: standard ('normal'), small subgroup internal-only ('small_internal'),
+or small subgroup with data borrowing ('small_borrow').}
 
 \item{gen_null}{T/F: generate null distributions.}
-
-\item{R_null}{Number of replications for null distribution.}
 
 \item{bootstrap}{Obtain bootstrap estimates using rescaled method ('rescaled') or
 no bootstrap ('none', the default).}
 
 \item{m_factor}{Fractional power for calculating resample size (default 0.75).}
+
+\item{pi_model}{Pre-fit propensity score model.}
+
+\item{pi_model_type}{Type of propensity score model: logistic regression ('glm') or random forest ('rf')}
+
+\item{pi_model_seed}{Numeric vector of random seeds for random forest propensity score model. Required if pi_model_type is 'rf'.
+Must be length 2 if pi_model is not specified and length 1 if pi_model is specified.
+First element is set prior to model fitting; second element (or only element if pi_model specified) is set prior to prediction.}
+
+\item{pi_xvars}{Character vector of covariates used in propensity score model.}
+
+\item{outcome_model_type}{Type of outcome model: logistic regression ('glm'), random forest ('rf'),
+or neural network ('neural_net')}
+
+\item{outcome_xvars}{Character vector of covariates used in outcome models.}
+
+\item{fit_method_int}{Type of internal data model for P(A=a): multinomial ('multinomial') or neural network ('neural_net')}
+
+\item{nfolds}{Number of folds for cross-fitting (default 5).}
+
+\item{pa_xvars_int}{Character vector of covariates used in internal P(A=a) model.}
+
+\item{data_external}{External data set. Must contain at least A1, A2, and a subset of covariates used to train P(A=a) model.}
+
+\item{fit_method_ext}{Type of external data model for P(A=a): multinomial ('multinomial') or neural network ('neural_net')}
+
+\item{pa_xvars_ext}{Character vector of covariates used in external P(A=a) model.}
+
+\item{borrow_metric}{Metric for data borrowing: AUC ('auc') or Brier score ('brier')}
+
+\item{pa_model_ext}{Pre-fit external P(A=a) model. Can be either multinomial or neural network model produced by the package nnet.
+Model type must match fit_method_ext.}
 }
 \value{
 List with the following components:

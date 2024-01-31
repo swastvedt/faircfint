@@ -1,7 +1,4 @@
-## code to prepare `sim_data_1` dataset goes here
-
-usethis::use_data(sim_data_1, overwrite = TRUE)
-
+## code to prepare `ex_data_estimation` dataset goes here
 expit <- function(x) 1/(1+exp(-x))
 logit <- function(x) log(x/(1-x))
 prob_trunc <- function(p) pmax(pmin(p, 0.995),0.005)
@@ -17,8 +14,8 @@ params_1 <- list(
   orOpp_maj = 0.3,
   orOpp_margint = 0.2
 )
-params_2 <- list(
-  pa = c(0.58, 0.23, 0.13, 0.06),
+params_list <- list(
+  pa = c(0.49, 0.23, 0.13, 0.15),
   p = 4,
   mean_X = c(1, -1, 2, -2),
   z_trt_int = 0.5,
@@ -27,7 +24,7 @@ params_2 <- list(
   z_trt_maj = 0.2,
   # coefficients for P(Y0=1|X)
   alpha_Y0 = logit(params_1$nr_maj),
-  beta_Y0 = c(1,1,1,1),
+  beta_Y0 = c(1,1,1,0.75),
   # coefficients for P(Y0=1|A1, A2)
   betaA_Y0 = c(logit(params_1$nr_marg)-logit(params_1$nr_maj), logit(params_1$nr_marg)-logit(params_1$nr_maj), logit(params_1$nr_maj)-2*logit(params_1$nr_marg)+logit(params_1$nr_int)),
   # coefficients for P(D=1|X, Y0=1)
@@ -41,12 +38,7 @@ params_2 <- list(
   betaA_DOpp = c(logit(params_1$orOpp_margint)-logit(params_1$orOpp_maj), logit(params_1$orOpp_margint)-logit(params_1$orOpp_maj), logit(params_1$orOpp_maj)-logit(params_1$orOpp_margint)),
   # Coefficients for adding S to opportunity rate and opposite
   betaS_D = logit(0.1),
-  betaS_DOpp = logit(0.1),
-  # Observational error rates
-  fpr_int = 0.1,
-  fnr_int = 0.2,
-  fpr_marg = 0.1,
-  fnr_marg = 0.2
+  betaS_DOpp = logit(0.1)
 )
 
 data_gen <- function(params, type, N, rai = NULL, cutoff) {
@@ -68,43 +60,39 @@ data_gen <- function(params, type, N, rai = NULL, cutoff) {
     X[j,] = mvtnorm::rmvnorm(1, mean = mean_X, sigma = diag(0.3, nrow = p))
   }
   # 1) Probability of having the event under no treatment (need rate)
-  Y0_X <- stats::rbinom(N, 1,
+  Y0 <- stats::rbinom(N, 1,
                  prob = prob_trunc(
                    expit(alpha_Y0 + cbind(X, A1, A2, A1*A2)%*%c(beta_Y0, betaA_Y0))
                  ))
   # 2) Probability of no event under treatment, given event under no treatment (intervention strength)
-  Y1_X <- stats::rbinom(N, 1, prob = dplyr::case_when(
-    A1 == 1 & A2 == 1 & Y0_X == 1 ~ 1-z_trt_int,
-    A1 == 0 & A2 == 1 & Y0_X == 1 ~ 1 - z_trt_marg,
-    A1 == 1 & A2 == 0 & Y0_X == 1 ~ 1 - z_trt_A11_A20,
-    A1 == 0 & A2 == 0 & Y0_X == 1 ~ 1 - z_trt_maj,
+  Y1 <- stats::rbinom(N, 1, prob = dplyr::case_when(
+    A1 == 1 & A2 == 1 & Y0 == 1 ~ 1-z_trt_int,
+    A1 == 0 & A2 == 1 & Y0 == 1 ~ 1 - z_trt_marg,
+    A1 == 1 & A2 == 0 & Y0 == 1 ~ 1 - z_trt_A11_A20,
+    A1 == 0 & A2 == 0 & Y0 == 1 ~ 1 - z_trt_maj,
     TRUE ~ 0
   ))
   # 3) Probability of treatment, by whether or not you would have had the event under no treatment (opportunity rate and its opposite)
   if(type == "pre") {
     or <- alpha_D + cbind(X[,1:2], A1, A2, A1*A2)%*%c(beta_D, betaA_D)
     orOpp <- alpha_DOpp + cbind(X[,1:2], A1, A2, A1*A2)%*%c(beta_DOpp, betaA_DOpp)
-  } else if (type == "post_rai_rf") {
-    if(!exists("rai")) stop("Specify RAI if type = 'post_rai_rf'")
+  } else if (type == "post") {
+    if(!exists("rai")) stop("Specify RAI if type = 'post'")
     new_data <- data.frame("A1" = as.factor(as.character(A1)), "A2" = as.factor(as.character(A2)), "X.1" = X[,1], "X.2" = X[,2], "X.3" = X[,3], "X.4" = X[,4])
     S_prob <- stats::predict(rai, newdata = new_data, type = "prob")[,2]
     S <- dplyr::if_else(S_prob >= cutoff, 1, 0)
     or <- alpha_D + cbind(X[,1:2], A1, A2, A1*A2, S)%*%c(beta_D, betaA_D, betaS_D)
     orOpp <- alpha_DOpp + cbind(X[,1:2], A1, A2, A1*A2, S)%*%c(beta_DOpp, betaA_DOpp, betaS_DOpp)
-  } else {stop("'type' must be one of 'pre', 'post_rai_rf'")}
+  } else {stop("'type' must be one of 'pre', 'post'")}
 
-  D_X <- stats::rbinom(N, 1, prob = prob_trunc(expit(or)))
-  Y_X <- (1-D_X)*Y0_X + D_X*Y1_X
+  D <- stats::rbinom(N, 1, prob = prob_trunc(expit(or)))
+  Y <- (1-D)*Y0 + D*Y1
 
   A1 <- as.factor(as.character(A1))
   A2 <- as.factor(as.character(A2))
+  data_list <- list("A1"=A1, "A2"=A2, "X"=X, "Y"=Y, "D"=D)
 
-  data_list <- list("A1"=A1, "A2"=A2, "X"=X, "Y0"=Y0_X, "Y1" = Y1_X, "Y"=Y_X, "D"=D_X)
-  if(type == "pre") {
-    data_list[["orOpp"]] <- orOpp
-    data_list[["or"]] <- or
-  }
-  if(type != "pre") {
+  if(type=="post") {
     data_list[["S"]] <- S
     data_list[["S_prob"]] <- S_prob
   }
@@ -112,14 +100,14 @@ data_gen <- function(params, type, N, rai = NULL, cutoff) {
 }
 
 # RAI training data
-data_train <- as.data.frame(data_gen(params_2, type = "pre", N = 1000))
+data_train <- as.data.frame(data_gen(params_list, type = "pre", N = 1000))
 data_train$Y <- as.factor(as.character(data_train$Y))
 
 # RAI
 rai <- randomForest::randomForest(Y ~ A1 + A2 + X.1 + X.2 + X.3 + X.4, data = data_train, mtry = 6)
 
 # Estimation data
-data_est <- as.data.frame(data_gen(params_2, type = "post_rai_rf", N=5000, rai = rai, cutoff = 0.5))
+ex_data_estimation <- as.data.frame(data_gen(params_list, type = "post", N=5000, rai = rai, cutoff = 0.5))
 
 # Save estimation data
-usethis::use_data(data_est, overwrite = T)
+usethis::use_data(ex_data_estimation, overwrite = TRUE)

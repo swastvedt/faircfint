@@ -5,26 +5,33 @@ Authors@R:
     person("Solvejg", "Wastvedt", , "wastv004@umn.edu", role = c("aut", "cre"),
            comment = c(ORCID = "0000-0002-2420-7909"))
 Description: This package provides functions for estimation and inference for intersectional,
-  counterfactual unfairness metrics. Estimation is done with inverse probability weighting,
-  and inference is via the rescaled bootstrap and permutation null distributions.
+  counterfactual unfairness metrics. Estimation is done via inverse probability weighting ("normal" estimator type) or 
+  regression estimation with optional data borrowing ("small" estimator types).
+  Inference is via the rescaled bootstrap and permutation null distributions.
 License: GPL (>= 3)
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.2.3
 Imports: 
+    checkmate,
     dplyr,
     egg,
     ggplot2,
     magrittr,
+    mlr3measures,
+    nnet,
+    pROC,
     randomForest,
     rlang,
     splitstackshape,
     stats,
     stringr,
-    tidyr,
-    utils
+    tidyr
 URL: https://github.com/swastvedt/faircfint
 BugReports: https://github.com/swastvedt/faircfint/issues
 Depends: 
     R (>= 2.10)
 LazyData: true
+Suggests: 
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

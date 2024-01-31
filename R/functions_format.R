@@ -1,8 +1,8 @@
 cond_round_3 <- function(table) {
-  table %>% dplyr::mutate(dplyr::across(where(is.numeric), round, digits=3)) %>%
+  table %>% dplyr::mutate(dplyr::across(dplyr::where(is.numeric), round, digits=3)) %>%
     dplyr::mutate(dplyr::across(dplyr::everything(), function(x) {replace(x, x==0, "<0.001")}))
 }
-utils::globalVariables("where")
+# utils::globalVariables("where")
 
 # Extract names of variables with non-zero coefficients after cv.glmnet.
 #
@@ -22,7 +22,6 @@ select_coef <- function(model, lambda = NULL, xvars, outcome) {
   } else {
     l = model$lambda.1se
   }
-
   coef <- data.frame(coef.name = dimnames(coef(model, s=l))[[1]],
                      coef.value = matrix(coef(model, s=l))) %>%
     dplyr::filter(.data$coef.value != 0) %>%
@@ -37,67 +36,16 @@ select_coef <- function(model, lambda = NULL, xvars, outcome) {
   return(list(coef = coef, vars_names = vars_names, formula = formula))
 }
 
-# Get vector of names for output of 'get_defs_analysis' function.
-#
-# @param A1_length Length of 'A1' protected characteristic variable.
-# @param A2_length Length of 'A2' protected characteristic variable.
-#
-# @returns Vector of names.
-
-defs_names <- function(A1_length, A2_length) {
-  A1A2_length <- A1_length*A2_length
-  c(paste("fpr", as.character(seq(1:A1A2_length)), sep = "_"),
-    paste("fnr", as.character(seq(1:A1A2_length)), sep = "_"),
-    paste("cfpr", as.character(seq(1:A1A2_length)), sep = "_"),
-    paste("cfnr", as.character(seq(1:A1A2_length)), sep = "_"),
-    paste("cfpr_marg_A1", as.character(seq(1:A1_length)), sep = "_"),
-    paste("cfpr_marg_A2", as.character(seq(1:A2_length)), sep = "_"),
-    paste("cfnr_marg_A1", as.character(seq(1:A1_length)), sep = "_"),
-    paste("cfnr_marg_A2", as.character(seq(1:A2_length)), sep = "_"),
-    "cdelta_avg_neg", "cdelta_max_neg", "cdelta_quant_neg", "cdelta_var_neg", "odelta_int_neg", "cdelta_marg_neg",
-    "cdelta_avg_pos_new", "cdelta_max_pos_new", "cdelta_quant_pos_new", "cdelta_var_pos_new", "odelta_int_pos", "cdelta_marg_pos_new"
-  )
-}
-
-# Assign column names to output of 'get_defs_analysis' or other list result object.
-#
-# @inheritParams defs_names
-# @param defs List of definitions, output by 'get_defs_analysis' function.
-#
-# @returns Dataframe of unfairness metrics with named columns.
-
-names_defs <- function(defs, A1_length, A2_length) {
-  df <- as.data.frame(t(defs))
-  colnames(df) <- defs_names(A1_length, A2_length)
-  return(df)
-}
-
-# Assign column names to bootstrap results or other dataframe result object.
-#
-# @inheritParams defs_names
-# @param bs_table Dataframe of bootstrap results.
-#
-# @returns Dataframe of bootstrap results with named columns.
-
-names_df <- function(bs_table, A1_length, A2_length) {
-  df <- as.data.frame(bs_table)
-  colnames(df) <- defs_names(A1_length, A2_length)
-  return(df)
-}
-
 # Create rescaled bootstrap estimate table from results of bs_rescaled_analysis.
 #
-# @inheritParams names_df
-# @inheritParams names_defs
+# @param bs_table Dataframe of bootstrap results.
+# @param est_vals List of definitions, output by 'get_defs_analysis' function.
 # @param sampsize Sample size of estimation data set.
 # @param m_factor Fractional power for calculating resample size.
 #
 # @returns Dataframe of rescaled bootstrap estimates.
 
-get_bs_rescaled <- function(bs_table, defs, sampsize, A1_length, A2_length,
-                            m_factor) {
-  bs_table <- names_df(bs_table, A1_length = A1_length, A2_length = A2_length)
-  est_vals <- names_defs(defs, A1_length = A1_length, A2_length = A2_length)[1,]
+get_bs_rescaled <- function(bs_table, est_vals, sampsize, m_factor) {
   m <- sampsize^m_factor
   sqrt(m)*sweep(bs_table, MARGIN = 2, STATS = unlist(est_vals), FUN = "-")
 }
@@ -105,8 +53,8 @@ get_bs_rescaled <- function(bs_table, defs, sampsize, A1_length, A2_length,
 # Calculate normal approximation confidence interval.
 #
 # @param bs_rescaled Rescaled bootstrap estimate table (result of get_bs_rescaled).
-# @param est_named Named 1-row dataframe of raw metric estimates (result of names_defs).
-# @param parameter Column name of the metric being estimated (string).
+# @param est_named Vector of metrics ('defs' element of'analysis_estimation' function output).
+# @param parameter Name of the metric being estimated (string).
 # @param sampsize Sample size of estimation data set.
 # @param alpha Size of confidence interval.
 #
@@ -114,7 +62,7 @@ get_bs_rescaled <- function(bs_table, defs, sampsize, A1_length, A2_length,
 
 ci_norm <- function(bs_rescaled, est_named, parameter, sampsize, alpha) {
   data.frame(
-    var_est = stats::var(bs_rescaled[[parameter]], na.rm = T),
+    var_est = stats::var(bs_rescaled[,parameter], na.rm = T),
     point_est = est_named[[parameter]]
   ) %>%
   dplyr::mutate(
@@ -133,8 +81,8 @@ ci_norm <- function(bs_rescaled, est_named, parameter, sampsize, alpha) {
 
 ci_tint <- function(bs_rescaled, est_named, parameter, sampsize, alpha, m_factor) {
   se_table <- ci_norm(bs_rescaled, est_named, parameter, sampsize, alpha)
-  data_temp <- bs_rescaled %>%
-    dplyr::mutate(t_value = bs_rescaled[[parameter]]/(sqrt(sampsize^m_factor)*se_table$se_est))
+  data_temp <- as.data.frame(bs_rescaled) %>%
+    dplyr::mutate(t_value = bs_rescaled[,parameter]/(sqrt(sampsize^m_factor)*se_table$se_est))
   data.frame(
     point_est = se_table$point_est,
     se_est = se_table$se_est,

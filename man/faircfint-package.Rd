@@ -6,7 +6,7 @@
 \alias{faircfint-package}
 \title{faircfint: Intersectional, counterfactual unfairness metrics}
 \description{
-This package provides functions for estimation and inference for intersectional, counterfactual unfairness metrics. Estimation is done with inverse probability weighting, and inference is via the rescaled bootstrap and permutation null distributions.
+This package provides functions for estimation and inference for intersectional, counterfactual unfairness metrics. Estimation is done via inverse probability weighting ("normal" estimator type) or regression estimation with optional data borrowing ("small" estimator types). Inference is via the rescaled bootstrap and permutation null distributions.
 }
 \seealso{
 Useful links:

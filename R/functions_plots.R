@@ -5,17 +5,19 @@
 #' @param sampsize Sample size of estimation data set.
 #' @param alpha Size of confidence interval.
 #' @param m_factor Fractional power for calculating resample size.
-#' @param plot_labels Vector of (shortened) protected group names for labeling counterfactual error
-#'  rate plots. Must have length(A1)*length(A2) components.
-#' @param plot_values Vector of numeric ggplot2 shape scale values
-#'  for counterfactual error rate plots. Must have length(A1)*length(A2) components.
-#' @param plot_colors Vector of colors (string name or hex) for counterfactual error
-#'  rate plots. Must have length(A1)*length(A2) components.
-#' @param delta_uval Threshold for u-value test. Must be between 0 and 1. Required if 'table_null' is in 'results'.
+#' @param plot_labels Character vector of protected group names for labeling counterfactual error
+#'  rate plots. Must have length(A1)*length(A2) components. Default is "Group X" with groups in factor level order, varying first A2 then A1.
+#' @param plot_values Numeric vector of ggplot2 shape scale values
+#'  for counterfactual error rate plots. Must have length(A1)*length(A2) components. Default is all circles (shape 16).
+#' @param plot_colors Character vector of colors (string name or hex) for counterfactual error
+#'  rate plots. Must have length(A1)*length(A2) components. Default is viridis discrete scale.
+#' @param delta_uval Threshold for u-value test. Must be between 0 and 1, default 0.1.
 #'
 #' @returns List of plots with the following components:
 #'  * cfpr: Counterfactual false positive rates by group.
+#'  * cfpr_unlabeled: Counterfactual false positive rate plot without group labels.
 #'  * cfnr: Counterfactual false negative rates by group.
+#'  * cfnr_unlabeled: Counterfactual false negative rate plot without group labels.
 #'  * metrics_pos: Positive unfairness metrics.
 #'  * metrics_neg: Negative unfairness metrics.
 #'  * null_dist: Null distribution plots with estimated metrics and confidence intervals. Returned only if 'table_null' is in 'results'.
@@ -23,19 +25,18 @@
 #' @export
 
 get_plots <- function(results, sampsize, alpha, m_factor,
-                      plot_labels, plot_values, plot_colors, delta_uval=NULL) {
-  ##################
+                      plot_labels=NULL, plot_values=NULL, plot_colors=NULL, delta_uval=0.1) {
   # Prepare results
-  ##################
-  # Check inputs
+  ## Check inputs
   if('table_null' %in% names(results) & is.null(delta_uval)) stop("Must specify 'delta_uval' if null distribution results are provided.")
   est_named <- results$defs
 
-  # Rescaled bootstrap results
+  ## Rescaled bootstrap results
   bs_rescaled <- get_bs_rescaled(bs_table = results$boot_out, est_vals = results$defs,
                                  sampsize = sampsize, m_factor = m_factor)
-  # Confidence intervals
-  ## t-interval
+  ## Confidence intervals
+  ### For summary metrics
+  #### t-interval
   ci_t_avg_neg <- ci_tint(bs_rescaled, est_named, parameter = "avg_neg", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
   ci_t_avg_pos <- ci_tint(bs_rescaled, est_named, parameter = "avg_pos", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
 
@@ -44,7 +45,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
 
   ci_t_var_neg <- ci_tint(bs_rescaled, est_named, parameter = "var_neg", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
   ci_t_var_pos <- ci_tint(bs_rescaled, est_named, parameter = "var_pos", sampsize = sampsize, alpha = alpha, m_factor = m_factor)
-  ## t-interval, truncated
+  #### t-interval, truncated
   ci_trunc_avg_neg <- ci_trunc(ci_t_avg_neg, type = "tint")
   ci_trunc_avg_pos <- ci_trunc(ci_t_avg_pos, type = "tint")
 
@@ -77,7 +78,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
   names(ci_trunc_cfnr) <- names(results_cfnr)
   ci_trunc_cfnr <- ci_trunc_cfnr %>% dplyr::bind_rows(.id = "stat")
 
-  # Named null distribution results
+  ## Named null distribution results
   if('table_null' %in% names(results)) {
     table_null <- results$table_null
 
@@ -93,7 +94,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
       dplyr::left_join(est_named_pivot, by = "stat") %>%
       dplyr::mutate(obs_minus_null = .data$value_obs - .data$value_null)
 
-    # U-value table
+    ## U-value table
     table_uval <- data.frame(
       avg_neg = mean((est_named["avg_neg"] - table_null[,"avg_neg"]) > delta_uval, na.rm = T),
       avg_pos = mean((est_named["avg_pos"] - table_null[,"avg_pos"]) > delta_uval, na.rm = T),
@@ -104,11 +105,11 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     ) %>% cond_round_3()
   }
 
-  # Estimation table with confidence intervals
-  ## Put all CI information in same table
+  ## Estimation table with confidence intervals
+  ### Put all CI information in same table
   allcis_trunc <- dplyr::bind_rows(list(ci_trunc_df, ci_trunc_cfpr, ci_trunc_cfnr))
   rownames(allcis_trunc) <- NULL
-  ## Add CIs to estimation table
+  ### Add CIs to estimation table
   est_summaries <- data.frame(t(est_named)) %>%
     tidyr::pivot_longer(dplyr::everything(), names_to = "stat") %>%
     dplyr::mutate(sign = dplyr::case_when(
@@ -123,10 +124,17 @@ get_plots <- function(results, sampsize, alpha, m_factor,
       TRUE ~ "other"
     )) %>% dplyr::left_join(allcis_trunc, by = "stat")
 
-  #########
   # Plots
-  #########
-  # Counterfactual error rate plots
+  ## Set defaults if not user-specified
+  num_gps <- length(grep("cfpr", names(results$defs))) - length(grep("cfpr_marg", names(results$defs)))
+
+  if(is.null(plot_labels)) {
+    gp_names <- stringr::str_split(names(results$defs)[1:num_gps], "_", simplify = T)[,2]
+    plot_labels <- paste0("Group ", gp_names)
+  }
+  if(is.null(plot_values)) { plot_values <- rep(16, num_gps) }
+
+  ## Counterfactual error rate plots
   p_cfpr <- ggplot2::ggplot(dplyr::filter(est_summaries, .data$sign == "cfpr"), ggplot2::aes(x = "cFPR", y = .data$value, color = .data$stat, shape = .data$stat)) +
     ggplot2::geom_point(size = 4, position = ggplot2::position_dodge(width = 0.4)) +
     ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$low_trans, ymax = .data$high_trans), width = 0.2, position=ggplot2::position_dodge(width=0.4)) +
@@ -134,8 +142,16 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     ggplot2::theme(axis.text = ggplot2::element_text(size = 12), axis.title = ggplot2::element_text(size = 14),
           legend.text = ggplot2::element_text(size = 14), legend.spacing.y = ggplot2::unit(0.3, 'cm')) +
     ggplot2::guides(shape = ggplot2::guide_legend(byrow = TRUE)) +
-    ggplot2::scale_color_discrete(type = plot_colors, labels = plot_labels) +
     ggplot2::scale_shape_manual(values = plot_values, labels = plot_labels)
+
+  p_cfpr_unlabeled <- ggplot2::ggplot(dplyr::filter(est_summaries, .data$sign == "cfpr"), ggplot2::aes(x = "cFPR", y = .data$value, color = .data$stat, shape = .data$stat)) +
+    ggplot2::geom_point(size = 4, position = ggplot2::position_dodge(width = 0.4)) +
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$low_trans, ymax = .data$high_trans), width = 0.2, position=ggplot2::position_dodge(width=0.4)) +
+    ggplot2::labs(x = NULL, y = "Group cFPR Estimate", title = NULL, shape = "Group", color = "Group") +
+    ggplot2::theme(axis.text = ggplot2::element_text(size = 12), axis.title = ggplot2::element_text(size = 14),
+                   legend.text = ggplot2::element_text(size = 14), legend.spacing.y = ggplot2::unit(0.3, 'cm')) +
+    ggplot2::guides(shape = ggplot2::guide_legend(byrow = TRUE)) +
+    ggplot2::scale_shape_manual(values = plot_values)
 
   p_cfnr <- ggplot2::ggplot(dplyr::filter(est_summaries, .data$sign == "cfnr"), ggplot2::aes(x = "cFNR", y = .data$value, color = .data$stat, shape = .data$stat)) +
     ggplot2::geom_point(size = 4, position = ggplot2::position_dodge(width = 0.4)) +
@@ -144,10 +160,30 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     ggplot2::theme(axis.text = ggplot2::element_text(size = 12), axis.title = ggplot2::element_text(size = 14),
           legend.text = ggplot2::element_text(size = 14), legend.spacing.y = ggplot2::unit(0.3, 'cm')) +
     ggplot2::guides(shape = ggplot2::guide_legend(byrow = TRUE)) +
-    ggplot2::scale_color_discrete(type = plot_colors, labels = plot_labels) +
     ggplot2::scale_shape_manual(values = plot_values, labels = plot_labels)
 
-  # Unfairness metric plots
+  p_cfnr_unlabeled <- ggplot2::ggplot(dplyr::filter(est_summaries, .data$sign == "cfnr"), ggplot2::aes(x = "cFNR", y = .data$value, color = .data$stat, shape = .data$stat)) +
+    ggplot2::geom_point(size = 4, position = ggplot2::position_dodge(width = 0.4)) +
+    ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$low_trans, ymax = .data$high_trans), width = 0.2, position=ggplot2::position_dodge(width=0.4)) +
+    ggplot2::labs(x = NULL, y = "Group cFNR Estimate", title = NULL, shape = "Group", color = "Group") +
+    ggplot2::theme(axis.text = ggplot2::element_text(size = 12), axis.title = ggplot2::element_text(size = 14),
+                   legend.text = ggplot2::element_text(size = 14), legend.spacing.y = ggplot2::unit(0.3, 'cm')) +
+    ggplot2::guides(shape = ggplot2::guide_legend(byrow = TRUE)) +
+    ggplot2::scale_shape_manual(values = plot_values)
+
+  ### Set colors if not user-specified
+  if(is.null(plot_colors)) {
+    p_cfpr <- p_cfpr + ggplot2::scale_color_viridis_d(labels = plot_labels)
+    p_cfpr_unlabeled <- p_cfpr_unlabeled + ggplot2::scale_color_viridis_d()
+    p_cfnr <- p_cfnr + ggplot2::scale_color_viridis_d(labels = plot_labels)
+    p_cfnr_unlabeled <- p_cfnr_unlabeled + ggplot2::scale_color_viridis_d()
+  } else {
+    p_cfpr <- p_cfpr + ggplot2::scale_color_discrete(type = plot_colors, labels = plot_labels)
+    p_cfpr_unlabeled <- p_cfpr_unlabeled + ggplot2::scale_color_discrete(type = plot_colors)
+    p_cfnr <- p_cfnr + ggplot2::scale_color_discrete(type = plot_colors, labels = plot_labels)
+    p_cfnr_unlabeled <- p_cfnr_unlabeled + ggplot2::scale_color_discrete(type = plot_colors)
+  }
+  ## Unfairness metric plots
   p_metrics_neg <- ggplot2::ggplot(dplyr::filter(est_summaries, .data$sign == "aggregate_neg"), ggplot2::aes(x = "Unfairness metric", y = .data$value, color = .data$stat, shape = .data$stat)) +
     ggplot2::geom_point(size = 4, position = ggplot2::position_dodge(width = 0.4)) +
     ggplot2::geom_errorbar(ggplot2::aes(ymin = .data$low_trans, ymax = .data$high_trans), width = 0.2, position=ggplot2::position_dodge(width=0.4)) +
@@ -172,9 +208,9 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     ggplot2::scale_shape_manual(
       values = c(15, 16, 17), labels = c("Average", "Maximum", "Variational"))
 
-  # Null distribution/estimation plots
+  ## Null distribution/estimation plots
   if('table_null' %in% names(results)) {
-    ## Average
+    ### Average
     p_null_neg_avg <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "avg_neg"), ggplot2::aes(x = .data$obs_minus_null)) +
       ggplot2::geom_density() +
       ggplot2::geom_vline(xintercept = delta_uval, linetype = 2) +
@@ -186,7 +222,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     d_avgneg <- ggplot2::ggplot_build(p_null_neg_avg)$data[[1]]
     d_avgneg_sub <- dplyr::filter(d_avgneg, .data$x > 0.1)
     uval_avgneg_x <- max(d_avgneg$x)
-    uval_avgneg_y <- quantile(d_avgneg$y, 0.25)
+    uval_avgneg_y <- stats::quantile(d_avgneg$y, 0.25)
 
     if(nrow(d_avgneg_sub) > 0) {
       p_null_neg_avg <- p_null_neg_avg +
@@ -212,7 +248,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     d_avgpos <- ggplot2::ggplot_build(p_null_pos_avg)$data[[1]]
     d_avgpos_sub <- dplyr::filter(d_avgpos, .data$x > 0.1)
     uval_avgpos_x <- max(d_avgpos$x)
-    uval_avgpos_y <- quantile(d_avgpos$y, 0.25)
+    uval_avgpos_y <- stats::quantile(d_avgpos$y, 0.25)
 
     if(nrow(d_avgpos_sub) > 0) {
       p_null_pos_avg <- p_null_pos_avg +
@@ -226,7 +262,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
                             mapping = ggplot2::aes(label = paste0("u-value = ", .data$avg_pos)),
                             x = uval_avgpos_x, y = uval_avgpos_y, hjust = "right", vjust = "bottom", size = 5)
     }
-    ## Maximum
+    ### Maximum
     p_null_neg_max <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "max_neg"), ggplot2::aes(x = .data$obs_minus_null)) +
       ggplot2::geom_density() +
       ggplot2::geom_vline(xintercept = delta_uval, linetype = 2) +
@@ -238,7 +274,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     d_maxneg <- ggplot2::ggplot_build(p_null_neg_max)$data[[1]]
     d_maxneg_sub <- dplyr::filter(d_maxneg, .data$x > 0.1)
     uval_maxneg_x <- max(d_maxneg$x)
-    uval_maxneg_y <- quantile(d_maxneg$y, 0.25)
+    uval_maxneg_y <- stats::quantile(d_maxneg$y, 0.25)
 
     if(nrow(d_maxneg_sub) > 0) {
       p_null_neg_max <- p_null_neg_max +
@@ -264,7 +300,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     d_maxpos <- ggplot2::ggplot_build(p_null_pos_max)$data[[1]]
     d_maxpos_sub <- dplyr::filter(d_maxpos, .data$x > 0.1)
     uval_maxpos_x <- max(d_maxpos$x)
-    uval_maxpos_y <- quantile(d_maxpos$y, 0.25)
+    uval_maxpos_y <- stats::quantile(d_maxpos$y, 0.25)
 
     if(nrow(d_maxpos_sub) > 0) {
       p_null_pos_max <- p_null_pos_max +
@@ -278,7 +314,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
                             mapping = ggplot2::aes(label = paste0("u-value = ", .data$max_pos)),
                             x = uval_maxpos_x, y = uval_maxpos_y, hjust = "right", vjust = "bottom", size = 5)
     }
-    ## Variational
+    ### Variational
     p_null_neg_var <- ggplot2::ggplot(dplyr::filter(table_null_delta, .data$stat == "var_neg"), ggplot2::aes(x = .data$obs_minus_null)) +
       ggplot2::geom_density() +
       ggplot2::geom_vline(xintercept = delta_uval, linetype = 2) +
@@ -290,7 +326,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     d_varneg <- ggplot2::ggplot_build(p_null_neg_var)$data[[1]]
     d_varneg_sub <- dplyr::filter(d_varneg, .data$x > 0.1)
     uval_varneg_x <- max(d_varneg$x)
-    uval_varneg_y <- quantile(d_varneg$y, 0.25)
+    uval_varneg_y <- stats::quantile(d_varneg$y, 0.25)
 
     if(nrow(d_varneg_sub) > 0) {
       p_null_neg_var <- p_null_neg_var +
@@ -316,7 +352,7 @@ get_plots <- function(results, sampsize, alpha, m_factor,
     d_varpos <- ggplot2::ggplot_build(p_null_pos_var)$data[[1]]
     d_varpos_sub <- dplyr::filter(d_varpos, .data$x > 0.1)
     uval_varpos_x <- max(d_varpos$x)
-    uval_varpos_y <- quantile(d_varpos$y, 0.25)
+    uval_varpos_y <- stats::quantile(d_varpos$y, 0.25)
 
     if(nrow(d_varpos_sub) > 0) {
       p_null_pos_var <- p_null_pos_var +
@@ -330,14 +366,14 @@ get_plots <- function(results, sampsize, alpha, m_factor,
                             mapping = ggplot2::aes(label = paste0("u-value = ", .data$var_pos)),
                             x = uval_varpos_x, y = uval_varpos_y, hjust = "right", vjust = "bottom", size = 5)
     }
-    ## All in single plot
+    ### All in single plot
     p_null_all <- egg::ggarrange(plots = list(p_null_neg_avg, p_null_pos_avg, p_null_neg_max,
                                               p_null_pos_max, p_null_neg_var, p_null_pos_var),
                                  nrow = 3, draw = F)
   }
-
   # Return plots
-  return_list <- list(cfpr = p_cfpr, cfnr = p_cfnr, metrics_pos = p_metrics_pos, metrics_neg = p_metrics_neg)
+  return_list <- list(cfpr = p_cfpr, cfnr = p_cfnr, cfpr_unlabeled = p_cfpr_unlabeled, cfnr_unlabeled = p_cfnr_unlabeled,
+                      metrics_pos = p_metrics_pos, metrics_neg = p_metrics_neg)
   if('table_null' %in% names(results)) {
     return_list[['null_dist']] <- p_null_all
   }

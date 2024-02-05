@@ -222,13 +222,16 @@ get_pa_int_small <- function(data, pa_xvars_int, fit_method_int, nfolds) {
   return(pa_pred_int)
 }
 
-# Fit external data P(A=a) model.
-#
-# @inheritParams analysis_estimation
-#
-# @returns Model for P(A=a|X) fit on external data.
+#' Fit external data P(A=a) model.
+#'
+#' @inheritParams analysis_estimation
+#' @param maxit Maximum number of iterations for neural_net model. Default 1000.
+#'
+#' @returns Model for P(A=a|X) fit on external data.
+#'
+#' @export
 
-get_pa_ext_small <- function(data_external, pa_xvars_ext, fit_method_ext) {
+get_pa_ext_small <- function(data_external, pa_xvars_ext, fit_method_ext, maxit = 1000) {
 
   f_pa_model_ext <- stats::as.formula(paste0("as.factor(as.character(A1A2)) ~ ", paste(pa_xvars_ext, collapse = " + ")))
   data_external <- dplyr::mutate(data_external,
@@ -243,7 +246,7 @@ get_pa_ext_small <- function(data_external, pa_xvars_ext, fit_method_ext) {
     pa_model_ext <- nnet::nnet(f_pa_model_ext, data = dplyr::mutate(data_external, dplyr::across(tidyr::all_of(pa_xvars_ext_numeric), ~c(scale(.)))),
                                size = 100,
                                decay = 1,
-                               maxit = 3000,
+                               maxit = maxit,
                                MaxNWts = 6000, trace=F)
     if(pa_model_ext$convergence==0) {message("External model: converged")}else{message("External model: did not converge")}
   }

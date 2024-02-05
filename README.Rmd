@@ -33,7 +33,7 @@ devtools::install_github("swastvedt/faircfint")
 
 The main function, analysis_estimation, calculates the intersectional, counterfactual unfairness metrics from data (which must include risk predictions). 
 
-The 'normal' option for estimator_type uses the methods from ["An intersectional framework for counterfactual fairness in risk prediction"](https://doi.org/10.1093/biostatistics/kxad021). Options 'small_internal' and 'small_borrow' use the methods from ["Counterfactual fairness for small subgroups"](https://arxiv.org/abs/2310.19988).
+The 'standard' option for estimator_type uses the methods from ["An intersectional framework for counterfactual fairness in risk prediction"](https://doi.org/10.1093/biostatistics/kxad021). Options 'small_internal' and 'small_borrow' use the methods from ["Counterfactual fairness for small subgroups"](https://arxiv.org/abs/2310.19988).
 
 ```{r}
 library(faircfint)
@@ -42,21 +42,38 @@ library(faircfint)
 pi_model_ex <- glm(as.factor(as.character(D)) ~ A1*A2 + A1 + A2 + S_prob + X.1 + X.2 + X.3 + X.4, 
                    data = faircfint::ex_data_estimation, family = "binomial")
 
-# Estimate unfairness metrics, including bootstrap and null distribution
-results <- analysis_estimation(data = faircfint::ex_data_estimation, cutoff = 0.5, estimator_type = "normal",
+# Estimate counterfactual error rates and unfairness metrics, including bootstrap and null distribution
+results <- analysis_estimation(data = faircfint::ex_data_estimation, cutoff = 0.5, estimator_type = "standard",
                                pi_model = pi_model_ex, pi_model_type = "glm", pi_xvars = c("X.1", "X.2", "X.3", "X.4"),
                                gen_null = T, bootstrap = 'rescaled')
 
+# Estimate metrics using small subgroup option with no data borrowing
+pi_model_ex_small <- glm(as.factor(as.character(D)) ~ A1*A2 + A1 + A2 + S_prob + X.1 + X.2 + X.3 + X.4,
+                         data = ex_data_small, family = "binomial")
+
+results_smallsub <- analysis_estimation(ex_data_small, cutoff = 0.5, estimator_type = "small_internal",
+                                     gen_null = T, R_null = 100, bootstrap = 'rescaled', B=100,
+                                     pi_model = pi_model_ex_small, pi_model_type = "glm", pi_xvars = c("X.1", "X.2", "X.3", "X.4"),
+                                     outcome_model_type = "glm", outcome_xvars = c("X_outcome.1", "X_outcome.2", "X_outcome.3", "X_outcome.4", "X_outcome.5", "X_outcome.6", "X_outcome.7", "X_outcome.8"),
+                                     fit_method_int = "multinomial", nfolds = 5, pa_xvars_int = c("X_pa.1", "X_pa.2", "X_pa.3", "X_pa.4", "X_pa.5", "X_pa.6", "X_pa.7"))
+
+# Estimate metrics using small subgroup option with data borrowing
+## Optional fitting of external data model prior to running main function
+pa_model_ext_ex <- get_pa_ext_small(ex_data_external, fit_method_ext = "multinomial", pa_xvars_ext = c("X_pa.1", "X_pa.2", "X_pa.3", "X_pa.4", "X_pa.5"))
+
+results_borrow <- analysis_estimation(ex_data_small, cutoff = 0.5, estimator_type = "small_borrow",
+                                         gen_null = F, R_null = 100, bootstrap = 'none', B=100,
+                                         pi_model = pi_model_ex_small, pi_model_type = "glm", pi_xvars = c("X.1", "X.2", "X.3", "X.4"),
+                                         outcome_model_type = "glm", outcome_xvars = c("X_outcome.1", "X_outcome.2", "X_outcome.3", "X_outcome.4", "X_outcome.5", "X_outcome.6", "X_outcome.7", "X_outcome.8"),
+                                         fit_method_int = "multinomial", nfolds = 5, pa_xvars_int = c("X_pa.1", "X_pa.2", "X_pa.3", "X_pa.4", "X_pa.5", "X_pa.6", "X_pa.7"),
+                                         data_external = ex_data_external, fit_method_ext = "multinomial", pa_xvars_ext = c("X_pa.1", "X_pa.2", "X_pa.3", "X_pa.4", "X_pa.5"), borrow_metric = "brier",
+                                         pa_model_ext = pa_model_ext_ex)
+
 # Plot results
-results_plots <- get_plots(results, sampsize = 5000, alpha = 0.05, m_factor = 0.75,
-                           plot_labels = c("Group 1", "Group 2", "Group 3", "Group 4"),
-                           plot_values = c(15,16,17,18), plot_colors = c("black", "gray", "red", "dodgerblue"),
-                           delta_uval = 0.1)
+results_plots <- get_plots(results, sampsize = 5000, alpha = 0.05, m_factor = 0.75)
 
-# Example plot of negative (cFNR) versions of metrics
-#results_plots$cfnr
+
+# Example plot of negative (cFNR) versions of small subgroup metrics
+#results_plots$metrics_pos
 ```
-
-
-<!-- You'll still need to render `README.Rmd` regularly, to keep `README.md` up-to-date. `devtools::build_readme()` is handy for this. You could also use GitHub Actions to re-render `README.Rmd` every time you push. An example workflow can be found here: <https://github.com/r-lib/actions/tree/v1/examples>. -->
 

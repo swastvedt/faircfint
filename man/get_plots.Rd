@@ -9,18 +9,15 @@ get_plots(
   sampsize,
   alpha,
   m_factor,
-  A1_length,
-  A2_length,
-  plot_labels,
-  plot_values,
-  plot_colors,
-  delta_uval,
-  uval_labels
+  plot_labels = NULL,
+  plot_values = NULL,
+  plot_colors = NULL,
+  delta_uval = 0.1
 )
 }
 \arguments{
 \item{results}{Results of 'analysis_estimation', including null distribution and bootstrap.
-Must be a list with at least the components: defs, table_null, boot_out.}
+Must be a list with at least components 'defs' and 'boot_out'. Optional component: 'table_null'.}
 
 \item{sampsize}{Sample size of estimation data set.}
 
@@ -28,32 +25,27 @@ Must be a list with at least the components: defs, table_null, boot_out.}
 
 \item{m_factor}{Fractional power for calculating resample size.}
 
-\item{A1_length}{Number of levels of A1.}
+\item{plot_labels}{Character vector of protected group names for labeling counterfactual error
+rate plots. Must have length(A1)*length(A2) components. Default is "Group X" with groups in factor level order, varying first A2 then A1.}
 
-\item{A2_length}{Number of levels of A2.}
+\item{plot_values}{Numeric vector of ggplot2 shape scale values
+for counterfactual error rate plots. Must have length(A1)*length(A2) components. Default is all circles (shape 16).}
 
-\item{plot_labels}{Vector of (shortened) protected group names for labeling counterfactual error
-rate plots. Must have length(A1)*length(A2) components.}
+\item{plot_colors}{Character vector of colors (string name or hex) for counterfactual error
+rate plots. Must have length(A1)*length(A2) components. Default is viridis discrete scale.}
 
-\item{plot_values}{Vector of numeric ggplot2 shape scale values
-for counterfactual error rate plots. Must have length(A1)*length(A2) components.}
-
-\item{plot_colors}{Vector of colors (string name or hex) for counterfactual error
-rate plots. Must have length(A1)*length(A2) components.}
-
-\item{delta_uval}{Threshold for u-value test. Must be between 0 and 1.}
-
-\item{uval_labels}{Vector of x and y coordinates for labels on u-value plots. Must have length
-12.}
+\item{delta_uval}{Threshold for u-value test. Must be between 0 and 1, default 0.1.}
 }
 \value{
 List of plots with the following components:
 \itemize{
 \item cfpr: Counterfactual false positive rates by group.
+\item cfpr_unlabeled: Counterfactual false positive rate plot without group labels.
 \item cfnr: Counterfactual false negative rates by group.
+\item cfnr_unlabeled: Counterfactual false negative rate plot without group labels.
 \item metrics_pos: Positive unfairness metrics.
 \item metrics_neg: Negative unfairness metrics.
-\item null_dist: Null distribution plots with estimated metrics and confidence intervals.
+\item null_dist: Null distribution plots with estimated metrics and confidence intervals. Returned only if 'table_null' is in 'results'.
 }
 }
 \description{

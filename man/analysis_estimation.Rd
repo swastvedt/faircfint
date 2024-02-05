@@ -7,11 +7,13 @@
 analysis_estimation(
   data,
   cutoff,
-  estimator_type = c("normal", "small_internal", "small_borrow"),
+  estimator_type = c("standard", "small_internal", "small_borrow"),
   gen_null = c(T, F),
+  R_null = 500,
   bootstrap = c("none", "rescaled"),
+  B = 500,
   m_factor = 0.75,
-  pi_model,
+  pi_model = NULL,
   pi_model_type = c("glm", "rf"),
   pi_model_seed = NULL,
   pi_xvars,
@@ -34,13 +36,17 @@ S_prob (probability).}
 
 \item{cutoff}{Classification cutoff. Must be a single numeric value.}
 
-\item{estimator_type}{Type of estimation: standard ('normal'), small subgroup internal-only ('small_internal'),
+\item{estimator_type}{Type of estimation: standard ('standard'), small subgroup internal-only ('small_internal'),
 or small subgroup with data borrowing ('small_borrow').}
 
 \item{gen_null}{T/F: generate null distributions.}
 
+\item{R_null}{Number of replications for permutation null distribution (default 500).}
+
 \item{bootstrap}{Obtain bootstrap estimates using rescaled method ('rescaled') or
 no bootstrap ('none', the default).}
+
+\item{B}{Number of bootstrap resamples (default 500).}
 
 \item{m_factor}{Fractional power for calculating resample size (default 0.75).}
 

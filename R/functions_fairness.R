@@ -10,7 +10,7 @@ prob_trunc <- function(p) pmax(pmin(p, 0.995),0.005)
 # @param data Dataframe or tibble. Must include at least A1, A2, Y (binary 0/1),
 #  D (binary 0/1), S_prob (probability), Y0 (estimated), pi (estimated).
 # @param cutoff Classification cutoff. Must be a single numeric value.
-# @param estimator_type Type of estimation: standard ('normal'), small subgroup internal-only ('small_internal'),
+# @param estimator_type Type of estimation: standard ('standard'), small subgroup internal-only ('small_internal'),
 #  or small subgroup with data borrowing ('small_borrow').
 # @param preds_out Outcome model predictions (required if estimator_type is 'small_internal' or 'small_borrow').
 # @param preds_pa P(A=a) model predictions (required if estimator_type is 'small_internal' or 'small_borrow').
@@ -70,26 +70,26 @@ get_defs_analysis <- function(data, cutoff, estimator_type,
   })
 
   ### Remove groups with 0 or 1 and give a warning
-  cfpr_vec_dropped <- cfpr_vec[cfpr_vec != 0 & cfpr_vec != 1]
-  cfnr_vec_dropped <- cfnr_vec[cfnr_vec != 0 & cfnr_vec != 1]
-  fpr_vec_dropped <- fpr_vec[fpr_vec != 0 & fpr_vec != 1]
-  fnr_vec_dropped <- fnr_vec[fnr_vec != 0 & fnr_vec != 1]
+  cfpr_vec_dropped <- cfpr_vec[cfpr_vec != 0 & cfpr_vec != 1 & !is.null(cfpr_vec)]
+  cfnr_vec_dropped <- cfnr_vec[cfnr_vec != 0 & cfnr_vec != 1 & !is.null(cfnr_vec)]
+  fpr_vec_dropped <- fpr_vec[fpr_vec != 0 & fpr_vec != 1 & !is.null(fpr_vec)]
+  fnr_vec_dropped <- fnr_vec[fnr_vec != 0 & fnr_vec != 1 & !is.null(fnr_vec)]
 
   if(length(cfpr_vec_dropped)!=length(cfpr_vec)) {
     # print(paste0("cFPR: ", cfpr_vec))
     # print(table(A1=data$A1, A2=data$A2, Y=data$Y, S=data$S, D=data$D))
-    warning("cFPR of 0 or 1 for at least one group.", call. = F)
+    warning("cFPR of 0, 1, or NULL for at least one group.", call. = F)
   }
   if(length(cfnr_vec_dropped)!=length(cfnr_vec)) {
     # print(paste0("cFNR: ", cfnr_vec))
     # print(table(A1=data$A1, A2=data$A2, Y=data$Y, S=data$S, D=data$D))
-    warning("cFNR of 0 or 1 for at least one group.", call. = F)
+    warning("cFNR of 0, 1, or NULL for at least one group.", call. = F)
   }
   if(length(fpr_vec_dropped)!=length(fpr_vec)) {
-    warning("Observational FPR of 0 or 1 for at least one group.", call. = F)
+    warning("Observational FPR of 0, 1, or NULL for at least one group.", call. = F)
   }
   if(length(fnr_vec_dropped)!=length(fnr_vec)) {
-    warning("Observational FNR of 0 or 1 for at least one group.", call. = F)
+    warning("Observational FNR of 0, 1, or NULL for at least one group.", call. = F)
   }
 
   # Marginal cFPRs and cFNRs
@@ -121,29 +121,29 @@ get_defs_analysis <- function(data, cutoff, estimator_type,
   }, error=function(cond) {NULL})
 
   # Average
-  if(!is.null(cdeltans)) {
+  if(length(cdeltans)>0) {
     cdelta_avg_neg <- mean(sapply(cdeltans, abs), na.rm = T)
   } else { cdelta_avg_neg <- NA_real_ }
 
-  if(!is.null(cdeltaps)) {
+  if(length(cdeltaps)>0) {
     cdelta_avg_pos <- mean(sapply(cdeltaps, abs), na.rm = T)
   } else{ cdelta_avg_pos <- NA_real_ }
 
   # Max
-  if(!is.null(cdeltans)) {
+  if(length(cdeltans)>0) {
     cdelta_max_neg <- max(sapply(cdeltans, abs), na.rm = T)
   } else { cdelta_max_neg <- NA_real_ }
 
-  if(!is.null(cdeltaps)) {
+  if(length(cdeltaps)>0) {
     cdelta_max_pos <- max(sapply(cdeltaps, abs), na.rm = T)
   } else{ cdelta_max_pos <- NA_real_ }
 
   # Variational
-  if(!is.null(cdeltans)) {
+  if(length(cdeltans)>0) {
     cdelta_var_neg <- stats::var(sapply(cdeltans, abs), na.rm = T)
   } else { cdelta_var_neg <- NA_real_ }
 
-  if(!is.null(cdeltaps)) {
+  if(length(cdeltaps)>0) {
     cdelta_var_pos <- stats::var(sapply(cdeltaps, abs), na.rm = T)
   } else { cdelta_var_pos <- NA_real_ }
 
@@ -379,11 +379,13 @@ analysis_nulldist <- function(data, R, cutoff,
 #'  D (binary 0/1), covariates used to train propensity score model,
 #'  S_prob (probability).
 #' @param cutoff Classification cutoff. Must be a single numeric value.
-#' @param estimator_type Type of estimation: standard ('normal'), small subgroup internal-only ('small_internal'),
+#' @param estimator_type Type of estimation: standard ('standard'), small subgroup internal-only ('small_internal'),
 #'  or small subgroup with data borrowing ('small_borrow').
 #' @param gen_null T/F: generate null distributions.
+#' @param R_null Number of replications for permutation null distribution (default 500).
 #' @param bootstrap Obtain bootstrap estimates using rescaled method ('rescaled') or
 #'  no bootstrap ('none', the default).
+#' @param B Number of bootstrap resamples (default 500).
 #' @param m_factor Fractional power for calculating resample size (default 0.75).
 #' @param pi_model Pre-fit propensity score model.
 #' @param pi_model_type Type of propensity score model: logistic regression ('glm') or random forest ('rf')
@@ -413,9 +415,9 @@ analysis_nulldist <- function(data, R, cutoff,
 #'
 #' @export
 
-analysis_estimation <- function(data, cutoff, estimator_type = c('normal', 'small_internal', 'small_borrow'),
-                                gen_null = c(T,F), bootstrap = c('none', 'rescaled'), m_factor = 0.75,
-                                pi_model, pi_model_type = c('glm', 'rf'), pi_model_seed = NULL, pi_xvars,
+analysis_estimation <- function(data, cutoff, estimator_type = c('standard', 'small_internal', 'small_borrow'),
+                                gen_null = c(T,F), R_null=500, bootstrap = c('none', 'rescaled'), B=500, m_factor = 0.75,
+                                pi_model=NULL, pi_model_type = c('glm', 'rf'), pi_model_seed = NULL, pi_xvars,
                                 outcome_model_type = c(NULL, 'glm','rf','neural_net'), outcome_xvars=NULL,
                                 fit_method_int = c(NULL, 'multinomial', 'neural_net'), nfolds=5, pa_xvars_int=NULL,
                                 data_external=NULL, fit_method_ext = c(NULL, 'multinomial', 'neural_net'), pa_xvars_ext=NULL, borrow_metric = c(NULL, 'auc','brier'),
@@ -462,22 +464,22 @@ analysis_estimation <- function(data, cutoff, estimator_type = c('normal', 'smal
     if(!all(pa_xvars_ext %in% colnames(data_external))) stop("'data_external' must contain all external P(A=a) model covariates (pa_xvars_ext).")
   }
 
-  ## Convert Y, D levels other than 0/1 to 0/1
+  ## Convert Y, D levels other than 0/1 to 0/1, make numeric
   if(!identical(sort(levels(as.factor(data$Y))), c("0","1"))) {
     Ytemp <- replace(data$Y, as.factor(data$Y)==levels(as.factor(data$Y))[1], 0)
-    Ytemp <- replace(data$Y, as.factor(data$Y)==levels(as.factor(data$Y))[2], 1)
+    Ytemp <- replace(Ytemp, Ytemp==levels(as.factor(data$Y))[2], 1)
     data$Y <- Ytemp
   }
   if(!identical(sort(levels(as.factor(data$D))), c("0","1"))) {
     Dtemp <- replace(data$D, as.factor(data$D)==levels(as.factor(data$D))[1], 0)
-    Dtemp <- replace(data$D, as.factor(data$D)==levels(as.factor(data$D))[2], 1)
+    Dtemp <- replace(Dtemp, Dtemp==levels(as.factor(data$D))[2], 1)
     data$D <- Dtemp
   }
   ## Drop non-complete cases and give a warning
   data_complete_ind <- stats::complete.cases(data)
   data_complete <- dplyr::filter(data, data_complete_ind)
   if(nrow(data_complete) != nrow(data)) {
-    warning("'data' contains missing values, dropping incomplete rows")
+    warning("'data' contains missing values, dropping incomplete rows.")
     data <- data_complete
   }
   ## External data: required columns and types
@@ -508,11 +510,11 @@ analysis_estimation <- function(data, cutoff, estimator_type = c('normal', 'smal
   }
   A1A2_names <- paste0(A1A2_grid[,"Var2"], A1A2_grid[,"Var1"])
 
-  defs_names_normal <- c(paste0("fpr_", A1A2_names), paste0("fnr_", A1A2_names), paste0("cfpr_", A1A2_names), paste0("cfnr_", A1A2_names),
+  defs_names_standard <- c(paste0("fpr_", A1A2_names), paste0("fnr_", A1A2_names), paste0("cfpr_", A1A2_names), paste0("cfnr_", A1A2_names),
                   paste0("cfpr_marg_A1_", levels(data$A1)), paste0("cfpr_marg_A2_", levels(data$A2)), paste0("cfnr_marg_A1_", levels(data$A1)), paste0("cfnr_marg_A2_", levels(data$A2)),
                   "avg_neg", "max_neg", "var_neg",
                   "avg_pos", "max_pos", "var_pos")
-  defs_names_small <-  c(defs_names_normal,
+  defs_names_small <-  c(defs_names_standard,
                          paste0("cfpr_small_", A1A2_names), paste0("cfnr_small_", A1A2_names),
                          "avg_neg_small", "max_neg_small", "var_neg_small",
                          "avg_pos_small", "max_pos_small", "var_pos_small")
@@ -520,13 +522,13 @@ analysis_estimation <- function(data, cutoff, estimator_type = c('normal', 'smal
   if(estimator_type %in% c("small_internal", "small_borrow")) {
     defs_names <- defs_names_small
   } else {
-    defs_names <- defs_names_normal
+    defs_names <- defs_names_standard
   }
 
   # If gen_null option is selected, generate the null distribution
   if(gen_null) {
     # Get null distribution
-    table.null.temp <- analysis_nulldist(data, R = 50, cutoff = cutoff,
+    table.null.temp <- analysis_nulldist(data, R = R_null, cutoff = cutoff,
                                          pi_model_type = pi_model_type, pi_model_seed = pi_model_seed, pi_xvars = pi_xvars,
                                          defs_names = defs_names, estimator_type = estimator_type,
                                          outcome_model_type=outcome_model_type, outcome_xvars=outcome_xvars,
@@ -536,7 +538,7 @@ analysis_estimation <- function(data, cutoff, estimator_type = c('normal', 'smal
   }
   # Get bootstrap estimates: resample conditional on observed protected group proportions
   if (bootstrap == 'rescaled') {
-    boot.out <- bs_rescaled_analysis(data, B = 50, m_factor = m_factor, cutoff = cutoff,
+    boot.out <- bs_rescaled_analysis(data, B = B, m_factor = m_factor, cutoff = cutoff,
                                      pi_model_type = pi_model_type, pi_model_seed = pi_model_seed, pi_xvars = pi_xvars,
                                      defs_names = defs_names, estimator_type = estimator_type,
                                      outcome_model_type=outcome_model_type, outcome_xvars=outcome_xvars,
